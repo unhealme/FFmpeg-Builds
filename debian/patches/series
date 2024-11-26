@@ -79,3 +79,4 @@
 0079-videotoolbox-remove-opengl-compatability.patch
 0080-use-dynamic-pool-for-vpl-qsv-hwupload.patch
 0081-backport-av1-videotoolbox.patch
+0082-fix-ass-incorrect-null-copy.patch
