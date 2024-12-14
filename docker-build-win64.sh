@@ -6,7 +6,7 @@ set -o errexit
 set -o xtrace
 
 # Update mingw-w64 headers
-mingw_commit="cdf6b16b805ce7d02f6b1b742911ba0770b49bbb"
+mingw_commit="b45bcc136eaa697b5bde3a5949b45f3c91b4a1ff"
 git clone https://git.code.sf.net/p/mingw-w64/mingw-w64.git
 pushd mingw-w64/mingw-w64-headers
 git checkout ${mingw_commit}
@@ -189,7 +189,7 @@ popd
 popd
 
 # HARFBUZZ
-git clone -b 10.0.1 --depth=1 https://github.com/harfbuzz/harfbuzz.git
+git clone -b 10.1.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
 meson setup harfbuzz harfbuzz_build \
     --prefix=${FF_DEPS_PREFIX} \
     --cross-file=${FF_MESON_TOOLCHAIN} \
@@ -320,7 +320,7 @@ popd
 # OPENMPT
 mkdir mpt
 pushd mpt
-mpt_ver="0.7.10"
+mpt_ver="0.7.12"
 mpt_link="https://lib.openmpt.org/files/libopenmpt/src/libopenmpt-${mpt_ver}+release.autotools.tar.gz"
 wget ${mpt_link} -O mpt.tar.gz
 tar xaf mpt.tar.gz
@@ -390,7 +390,7 @@ make install
 popd
 
 # X265
-x265_commit="487105dcd21d0f36a7a9e0ec50de85577b9bed04"
+x265_commit="fa2770934b8f3d88aa866c77f27cb63f69a9ed39"
 git clone https://bitbucket.org/multicoreware/x265_git.git
 pushd x265_git
 git checkout ${x265_commit}
@@ -406,6 +406,7 @@ x265_conf="
     -DENABLE_TESTS=OFF
     -DENABLE_CLI=OFF
     -DENABLE_PIC=ON
+    -DENABLE_ALPHA=ON
 "
 mkdir 8b 10b 12b
 cmake \
