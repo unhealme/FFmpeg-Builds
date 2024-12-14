@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/nyanmisaka/mpp.git"
-SCRIPT_COMMIT="110d2660a18855656205cdda8f40527c8a9cc3c1"
+SCRIPT_COMMIT="d109e6296989600cadd7b18acd0dbf3be73c33d4"
 SCRIPT_BRANCH="jellyfin-mpp"
 
 ffbuild_enabled() {

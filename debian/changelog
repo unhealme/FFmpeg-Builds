@@ -1,3 +1,12 @@
+jellyfin-ffmpeg (7.0.2-8) unstable; urgency=medium
+
+  * avcodec/videotoolbox: backport AV1 hardware acceleration
+  * Fix some edge case issues in RKMPP
+  * fftools/ffmpeg_mux_init: default to input timebase for streamcopy
+  * avformat/assenc: do not copy null terminator
+
+ -- nyanmisaka <nst799610810@gmail.com>  Sat, 14 Dec 2024 18:33:05 +0800
+
 jellyfin-ffmpeg (7.0.2-7) unstable; urgency=medium
 
   * Fix MppPacket being released before MppMeta

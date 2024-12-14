@@ -23,7 +23,7 @@ msys2_references=(
   "cpe: cpe:/a:multicorewareinc:x265"
   "cpe: cpe:/a:multicorewareinc:x265_high_efficiency_video_coding"
 )
-_commit="487105dcd21d0f36a7a9e0ec50de85577b9bed04"
+_commit="fa2770934b8f3d88aa866c77f27cb63f69a9ed39"
 source=("${_realname}"::"git+https://bitbucket.org/multicoreware/x265_git.git#commit=${_commit}")
 sha256sums=('SKIP')
 
@@ -63,6 +63,7 @@ build() {
     -DEXPORT_C_API=OFF \
     -DENABLE_CLI=OFF \
     -DENABLE_SHARED=OFF \
+    -DENABLE_ALPHA=ON \
     -DENABLE_ASSEMBLY=${_ENABLE_ASM} \
   ../x265_${pkgver}/source
   ${MINGW_TOOLCHAIN_PREFIX}/bin/cmake.exe --build .
@@ -77,6 +78,7 @@ build() {
     -DEXPORT_C_API=OFF \
     -DENABLE_CLI=OFF \
     -DENABLE_SHARED=OFF \
+    -DENABLE_ALPHA=ON \
     -DENABLE_ASSEMBLY=${_ENABLE_ASM} \
   ../x265_${pkgver}/source
   ${MINGW_TOOLCHAIN_PREFIX}/bin/cmake.exe --build .
@@ -91,6 +93,7 @@ build() {
     -DCMAKE_INSTALL_PREFIX=${FF_MINGW_PREFIX} \
     -DENABLE_SHARED=OFF \
     -DCMAKE_DLL_NAME_WITH_SOVERSION=ON \
+    -DENABLE_ALPHA=ON \
     -DENABLE_ASSEMBLY=${_ENABLE_ASM} \
     -DENABLE_HDR10_PLUS=ON \
     -DEXTRA_LIB='x265_main10.a;x265_main12.a' \
