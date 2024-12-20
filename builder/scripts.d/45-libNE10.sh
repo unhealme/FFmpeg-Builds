@@ -1,7 +1,7 @@
 #!/bin/bash
 
-SCRIPT_REPO="https://github.com/projectNe10/Ne10.git"
-SCRIPT_COMMIT="1f059a764d0e1bc2481c0055c0e71538470baa83"
+SCRIPT_REPO="https://github.com/gnattu/Ne10.git"
+SCRIPT_COMMIT="545f4f18014cdbf9fb5fb1a9f5d24000200dfa8b"
 
 ffbuild_enabled() {
     [[ $TARGET == win* ]] && return -1
