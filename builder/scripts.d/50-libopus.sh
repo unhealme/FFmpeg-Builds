@@ -40,7 +40,13 @@ ffbuild_dockerbuild() {
 
     # reset CLFAGS because libopus may give up optimization if current CFLAGS contains value
     CFLAGS_BACKUP="$CFLAGS"
-    export CFLAGS="-O3" # For some reason libopus will not add optimization flag, we have to set it ourselves
+
+    # For some reason libopus will not add optimization flag, we have to set it ourselves
+    if [[ $TARGET == mac* ]]; then
+          export CFLAGS="-O3"
+      else
+          export CFLAGS="-O3 -fPIC -DPIC"
+      fi
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
