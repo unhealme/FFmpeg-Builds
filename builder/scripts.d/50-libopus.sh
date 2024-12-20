@@ -43,10 +43,10 @@ ffbuild_dockerbuild() {
 
     # For some reason libopus will not add optimization flag, we have to set it ourselves
     if [[ $TARGET == mac* ]]; then
-          export CFLAGS="-O3"
-      else
-          export CFLAGS="-O3 -fPIC -DPIC"
-      fi
+        export CFLAGS="-O3"
+    else
+        export CFLAGS="-O3 -fPIC -DPIC"
+    fi
 
     ./configure "${myconf[@]}"
     make -j$(nproc)
