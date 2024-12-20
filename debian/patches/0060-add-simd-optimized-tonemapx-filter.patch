@@ -1909,9 +1909,9 @@ Index: FFmpeg/libavfilter/aarch64/vf_tonemapx_intrin_neon.c
 +            g1x8 = vminq_u16(g1x8, vdupq_n_u16(INT16_MAX));
 +            b1x8 = vminq_u16(b1x8, vdupq_n_u16(INT16_MAX));
 +
-+            r0ox8 = r0x8;
-+            g0ox8 = g0x8;
-+            b0ox8 = b0x8;
++            r0ox8 = vreinterpretq_s16_u16(r0x8);
++            g0ox8 = vreinterpretq_s16_u16(g0x8);
++            b0ox8 = vreinterpretq_s16_u16(b0x8);
 +
 +            r0oax4 = vmovl_s16(vget_low_s16(r0ox8));
 +            g0oax4 = vmovl_s16(vget_low_s16(g0ox8));
@@ -1938,9 +1938,9 @@ Index: FFmpeg/libavfilter/aarch64/vf_tonemapx_intrin_neon.c
 +            y0ox8 = vcombine_u16(vqmovun_s32(y0oax4), vqmovun_s32(y0obx4));
 +            vst1q_u16(&dsty[x], y0ox8);
 +
-+            r1ox8 = r1x8;
-+            g1ox8 = g1x8;
-+            b1ox8 = b1x8;
++            r1ox8 = vreinterpretq_s16_u16(r1x8);
++            g1ox8 = vreinterpretq_s16_u16(g1x8);
++            b1ox8 = vreinterpretq_s16_u16(b1x8);
 +
 +            r1oax4 = vmovl_s16(vget_low_s16(r1ox8));
 +            g1oax4 = vmovl_s16(vget_low_s16(g1ox8));
