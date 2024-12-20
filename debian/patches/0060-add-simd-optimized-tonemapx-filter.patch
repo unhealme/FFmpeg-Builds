@@ -2635,7 +2635,7 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemapx.c
-@@ -0,0 +1,1881 @@
+@@ -0,0 +1,1886 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -4079,6 +4079,11 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +    if (!desc || !odesc) {
 +        av_frame_free(&in);
 +        return AVERROR_BUG;
++    }
++
++    if (s->trc == AVCOL_TRC_SMPTE2084 && odesc->comp[0].depth == 8) {
++        av_log(s, AV_LOG_ERROR, "HDR passthrough requires 10 bit output format depth\n");
++        av_assert0(0);
 +    }
 +
 +    switch (odesc->comp[2].plane) {
