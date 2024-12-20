@@ -30,6 +30,7 @@ ffbuild_dockerbuild() {
         return -1
     fi
 
+    export NE10_LINUX_TARGET_ARCH=aarch64
     cmake .. "${myconf[@]}"
     make -j$(nproc)
     # NE10 does not have install method, we have to copy files with shell command
