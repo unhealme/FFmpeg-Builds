@@ -38,9 +38,15 @@ ffbuild_dockerbuild() {
         )
     fi
 
+    # reset CLFAGS because libopus may give up optimization if current CFLAGS contains value
+    CFLAGS_BACKUP="$CFLAGS"
+    export CFLAGS="-O3" # For some reason libopus will not add optimization flag, we have to set it ourselves
+
     ./configure "${myconf[@]}"
     make -j$(nproc)
     make install
+
+    export CFLAGS="$CFLAGS_BACKUP"
 
     if [[ $TARGET == *arm64 ]]; then
         if [[ $TARGET == mac* ]]; then
