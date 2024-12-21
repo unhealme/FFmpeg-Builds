@@ -38,19 +38,19 @@ ffbuild_dockerbuild() {
         )
     fi
 
-     # Override previously set -O(n) option and the CC's default optimization options.
+    # Override previously set -O(n) option and the CC's default optimization options.
     CFLAGS="$CFLAGS -O3" ./configure "${myconf[@]}"
     make -j$(nproc)
     make install
 
     if [[ $TARGET == *arm64 ]]; then
         if [[ $TARGET == mac* ]]; then
-          gsed -i 's/-lopus/-lopus -lNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
-          gsed -i 's/-I${includedir}\/opus/-I${includedir}\/opus -I${includedir}\/libNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
-      else
-          sed -i 's/-lopus/-lopus -lNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
-          sed -i 's/-I${includedir}\/opus/-I${includedir}\/opus -I${includedir}\/libNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
-      fi
+            gsed -i 's/-lopus/-lopus -lNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
+            gsed -i 's/-I${includedir}\/opus/-I${includedir}\/opus -I${includedir}\/libNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
+        else
+            sed -i 's/-lopus/-lopus -lNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
+            sed -i 's/-I${includedir}\/opus/-I${includedir}\/opus -I${includedir}\/libNE10/' "$FFBUILD_PREFIX"/lib/pkgconfig/opus.pc
+        fi
     fi
 }
 
