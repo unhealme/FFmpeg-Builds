@@ -1,0 +1,44 @@
+Index: FFmpeg/fftools/ffprobe.c
+===================================================================
+--- FFmpeg.orig/fftools/ffprobe.c
++++ FFmpeg/fftools/ffprobe.c
+@@ -146,6 +146,8 @@ static int show_private_data
+ #define SHOW_OPTIONAL_FIELDS_ALWAYS      1
+ static int show_optional_fields = SHOW_OPTIONAL_FIELDS_AUTO;
+ 
++static int only_show_first_video_frame = 0;
++
+ static char *output_format;
+ static char *stream_specifier;
+ static char *show_data_hash;
+@@ -3159,6 +3161,14 @@ static int read_interval_packets(WriterC
+             }
+ 
+             frame_count++;
++
++            if (only_show_first_video_frame) {
++                AVCodecParameters *par = ifile->streams[pkt->stream_index].st->codecpar;
++                if (par->codec_type != AVMEDIA_TYPE_VIDEO) {
++                    continue;
++                }
++            }
++
+             if (do_read_packets) {
+                 if (do_show_packets)
+                     show_packet(w, ifile, pkt, i++);
+@@ -3179,6 +3189,7 @@ static int read_interval_packets(WriterC
+ 
+                 while (process_frame(w, ifile, frame, pkt, &packet_new) > 0);
+             }
++            if (only_show_first_video_frame) break;
+         }
+         av_packet_unref(pkt);
+     }
+@@ -4587,6 +4598,7 @@ static const OptionDef real_options[] =
+     { "print_filename",        OPT_TYPE_FUNC, OPT_FUNC_ARG, {.func_arg = opt_print_filename}, "override the printed input filename", "print_file"},
+     { "find_stream_info",      OPT_TYPE_BOOL, OPT_INPUT | OPT_EXPERT, { &find_stream_info },
+         "read and decode the streams to fill missing information with heuristics" },
++    { "only_first_vframe",     OPT_TYPE_BOOL,        0, { &only_show_first_video_frame }, "only show first video frame when show_frames is used" },
+     { NULL, },
+ };
+ 
