@@ -11,6 +11,9 @@ ffbuild_dockerbuild() {
     git-mini-clone "$SCRIPT_REPO" "$SCRIPT_COMMIT" opus
     cd opus
 
+    # Fix AVX2 auto detction
+    wget -q -O - https://github.com/xiph/opus/commit/9ec11c1.patch | git apply
+
     ./autogen.sh
 
     local myconf=(
