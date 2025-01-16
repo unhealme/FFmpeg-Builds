@@ -19,20 +19,10 @@ Index: FFmpeg/libavcodec/bsf/h265_metadata.c
  } H265MetadataContext;
  
  
-@@ -385,6 +388,37 @@ static int h265_metadata_update_fragment
+@@ -385,6 +388,38 @@ static int h265_metadata_update_fragment
              if (err < 0)
                  return err;
          }
-+        if (ctx->remove_dovi) {
-+            if (au->units[i].type == HEVC_NAL_UNSPEC62) { // Dolby Vision RPU
-+                ff_cbs_delete_unit(au, i);
-+                av_log(bsf, AV_LOG_DEBUG, "Removing Dolby Vision RPU\n");
-+            }
-+            if (au->units[i].type == HEVC_NAL_UNSPEC63) { // Dolby Vision EL
-+                ff_cbs_delete_unit(au, i);
-+                av_log(bsf, AV_LOG_DEBUG, "Removing Dolby Vision EL\n");
-+            }
-+        }
 +        if (ctx->remove_hdr10plus) {
 +            // This implementation is not strictly correct as it does not decode the entire NAL.
 +            // There could be multiple SEIs packed within a single NAL, and some of them may not be HDR10+ metadata.
@@ -54,10 +44,21 @@ Index: FFmpeg/libavcodec/bsf/h265_metadata.c
 +                }
 +            }
 +        }
++    }
++
++    if (ctx->remove_dovi && au->nb_units) {
++        if (au->units[au->nb_units - 1].type == HEVC_NAL_UNSPEC62) { // Dolby Vision RPU
++            ff_cbs_delete_unit(au, au->nb_units - 1);
++            av_log(bsf, AV_LOG_DEBUG, "Removing Dolby Vision RPU\n");
++        }
++        if (au->units[au->nb_units - 1].type == HEVC_NAL_UNSPEC63) { // Dolby Vision EL
++            ff_cbs_delete_unit(au, au->nb_units - 1);
++            av_log(bsf, AV_LOG_DEBUG, "Removing Dolby Vision EL\n");
++        }
      }
  
      return 0;
-@@ -399,6 +433,11 @@ static const CBSBSFType h265_metadata_ty
+@@ -399,6 +434,11 @@ static const CBSBSFType h265_metadata_ty
  
  static int h265_metadata_init(AVBSFContext *bsf)
  {
@@ -69,7 +70,7 @@ Index: FFmpeg/libavcodec/bsf/h265_metadata.c
      return ff_cbs_bsf_generic_init(bsf, &h265_metadata_type);
  }
  
-@@ -478,6 +517,13 @@ static const AVOption h265_metadata_opti
+@@ -478,6 +518,13 @@ static const AVOption h265_metadata_opti
      { LEVEL("8.5", 255) },
  #undef LEVEL
  
