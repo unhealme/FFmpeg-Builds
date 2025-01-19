@@ -81,3 +81,4 @@
 0081-backport-av1-videotoolbox.patch
 0082-fix-ass-incorrect-null-copy.patch
 0083-default-to-input-timebase-for-streamcopy.patch
+0084-fix-a-race-condition-in-vaapi-csc-to-yuv420p.patch
