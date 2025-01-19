@@ -1,3 +1,13 @@
+jellyfin-ffmpeg (7.0.2-9) unstable; urgency=medium
+
+  * avfilter/tonemapx: add dovi to hdr10 support
+  * Add NE10 to enable more neon optimization for libopus
+  * Fix Opus AVX2 auto detection and DG1 upstream support
+  * lavc/bsf/hevc_metadata: always remove dovi at the end of au
+  * Fix a race condition in VAAPI CSC to YUV420P
+
+ -- nyanmisaka <nst799610810@gmail.com>  Sun, 19 Jan 2025 21:34:53 +0800
+
 jellyfin-ffmpeg (7.0.2-8) unstable; urgency=medium
 
   * avcodec/videotoolbox: backport AV1 hardware acceleration
