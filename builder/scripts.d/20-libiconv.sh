@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://skia.googlesource.com/third_party/libiconv"
-SCRIPT_COMMIT="v1.17"
+SCRIPT_COMMIT="v1.18"
 SCRIPT_TAGFILTER="v?.*"
 
 ffbuild_enabled() {
@@ -22,7 +22,12 @@ ffbuild_dockerbuild() {
 EOF
 
     ./gitsub.sh pull
-    ./gitsub.sh checkout gnulib d4ec02b3cc70cddaaa5183cc5a45814e0afb2292 # tag v1.0
+    ./gitsub.sh checkout gnulib e9c1d94f58eaacee919bb2015da490b980a5eedf
+
+    # No automake 1.17 packaged anywhere yet.
+    sed -i 's/-1.17/-1.16/' Makefile.devel
+
+    (unset CC CFLAGS GMAKE && ./autogen.sh)
 
     local myconf=(
         --prefix="$FFBUILD_PREFIX"
@@ -41,7 +46,6 @@ EOF
         return -1
     fi
 
-    ./autogen.sh
     ./configure "${myconf[@]}"
     make -j$(nproc)
     make install

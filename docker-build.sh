@@ -36,7 +36,7 @@ prepare_extra_common() {
     pushd ${SOURCE_DIR}
     mkdir iconv
     pushd iconv
-    iconv_ver="1.17"
+    iconv_ver="1.18"
     iconv_link="https://mirrors.kernel.org/gnu/libiconv/libiconv-${iconv_ver}.tar.gz"
     wget ${iconv_link} -O iconv.tar.gz
     tar xaf iconv.tar.gz
@@ -120,7 +120,7 @@ prepare_extra_common() {
     pushd ${SOURCE_DIR}
     mkdir fontconfig
     pushd fontconfig
-    fc_ver="2.15.0"
+    fc_ver="2.16.0"
     fc_link="https://www.freedesktop.org/software/fontconfig/release/fontconfig-${fc_ver}.tar.xz"
     wget ${fc_link} -O fc.tar.gz
     tar xaf fc.tar.gz
@@ -140,7 +140,7 @@ prepare_extra_common() {
 
     # HARFBUZZ
     pushd ${SOURCE_DIR}
-    git clone -b 10.1.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
+    git clone -b 10.2.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
     meson setup harfbuzz harfbuzz_build \
         ${MESON_CROSS_OPT} \
         --prefix=${TARGET_DIR} \
@@ -376,7 +376,7 @@ prepare_extra_amd64() {
 
     # GMMLIB
     pushd ${SOURCE_DIR}
-    git clone -b intel-gmmlib-22.5.5 --depth=1 https://github.com/intel/gmmlib.git
+    git clone -b intel-gmmlib-22.6.0 --depth=1 https://github.com/intel/gmmlib.git
     pushd gmmlib
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} ..
@@ -412,7 +412,7 @@ prepare_extra_amd64() {
     # Provides VPL header and dispatcher (libvpl.so.2) for FFmpeg
     # Both MSDK and VPL runtime can be loaded by VPL dispatcher
     pushd ${SOURCE_DIR}
-    git clone -b v2.13.0 --depth=1 https://github.com/intel/libvpl.git
+    git clone -b v2.14.0 --depth=1 https://github.com/intel/libvpl.git
     pushd libvpl
     sed -i 's|ParseEnvSearchPaths(ONEVPL_PRIORITY_PATH_VAR, searchDirList)|searchDirList.push_back("/usr/lib/jellyfin-ffmpeg/lib")|g' libvpl/src/mfx_dispatcher_vpl_loader.cpp
     mkdir build && pushd build
@@ -433,7 +433,7 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-24.4.2 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.1.0 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
@@ -453,7 +453,7 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-24.4.2 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.1.0 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
     wget -q -O - https://github.com/intel/media-driver/commit/d5dd47b.patch | git apply
@@ -476,7 +476,7 @@ prepare_extra_amd64() {
 
     # Vulkan Headers
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.303 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
+    git clone -b v1.4.305 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
     pushd Vulkan-Headers
     mkdir build && pushd build
     cmake \
@@ -489,7 +489,7 @@ prepare_extra_amd64() {
 
     # Vulkan ICD Loader
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.303 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
+    git clone -b v1.4.305 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
     pushd Vulkan-Loader
     mkdir build && pushd build
     cmake \
