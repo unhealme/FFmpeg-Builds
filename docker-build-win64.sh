@@ -6,7 +6,7 @@ set -o errexit
 set -o xtrace
 
 # Update mingw-w64 headers
-mingw_commit="b45bcc136eaa697b5bde3a5949b45f3c91b4a1ff"
+mingw_commit="be91da60c4ae62a76099279500810c8ffbef4da1"
 git clone https://git.code.sf.net/p/mingw-w64/mingw-w64.git
 pushd mingw-w64/mingw-w64-headers
 git checkout ${mingw_commit}
@@ -30,7 +30,7 @@ popd
 # ICONV
 mkdir iconv
 pushd iconv
-iconv_ver="1.17"
+iconv_ver="1.18"
 iconv_link="https://mirrors.kernel.org/gnu/libiconv/libiconv-${iconv_ver}.tar.gz"
 wget ${iconv_link} -O iconv.tar.gz
 tar xaf iconv.tar.gz
@@ -173,7 +173,7 @@ popd
 # FONTCONFIG
 mkdir fontconfig
 pushd fontconfig
-fc_ver="2.15.0"
+fc_ver="2.16.0"
 fc_link="https://www.freedesktop.org/software/fontconfig/release/fontconfig-${fc_ver}.tar.xz"
 wget ${fc_link} -O fc.tar.gz
 tar xaf fc.tar.gz
@@ -189,7 +189,7 @@ popd
 popd
 
 # HARFBUZZ
-git clone -b 10.1.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
+git clone -b 10.2.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
 meson setup harfbuzz harfbuzz_build \
     --prefix=${FF_DEPS_PREFIX} \
     --cross-file=${FF_MESON_TOOLCHAIN} \
@@ -320,7 +320,7 @@ popd
 # OPENMPT
 mkdir mpt
 pushd mpt
-mpt_ver="0.7.12"
+mpt_ver="0.7.13"
 mpt_link="https://lib.openmpt.org/files/libopenmpt/src/libopenmpt-${mpt_ver}+release.autotools.tar.gz"
 wget ${mpt_link} -O mpt.tar.gz
 tar xaf mpt.tar.gz
@@ -337,7 +337,7 @@ popd
 popd
 
 # LIBWEBP
-git clone -b v1.4.0 --depth=1 https://chromium.googlesource.com/webm/libwebp
+git clone -b v1.5.0 --depth=1 https://chromium.googlesource.com/webm/libwebp
 pushd libwebp
 ./autogen.sh
 ./configure \
@@ -557,7 +557,7 @@ popd
 popd
 
 # VPL
-git clone -b v2.13.0 --depth=1 https://github.com/intel/libvpl.git
+git clone -b v2.14.0 --depth=1 https://github.com/intel/libvpl.git
 pushd libvpl
 mkdir build && pushd build
 cmake \

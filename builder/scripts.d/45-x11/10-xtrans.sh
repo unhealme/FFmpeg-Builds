@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://gitlab.freedesktop.org/xorg/lib/libxtrans.git"
-SCRIPT_COMMIT="e58ae2d27f7baee28319faa02b77cdc344e2f0ca"
+SCRIPT_COMMIT="02415310dd4997b4a7943814381c0b52d91eb8de"
 
 ffbuild_enabled() {
     [[ $TARGET != linux* ]] && return -1

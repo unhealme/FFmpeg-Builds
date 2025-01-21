@@ -3,11 +3,11 @@
 _realname=libopenmpt
 pkgbase=mingw-w64-jellyfin-${_realname}
 pkgname=("${MINGW_PACKAGE_PREFIX}-jellyfin-${_realname}")
-pkgver=0.7.12
+pkgver=0.7.13
 pkgrel=1
 pkgdesc="A cross-platform C++ and C library to decode tracked music files (modules) into a raw PCM audio stream (mingw-w64)"
 arch=('any')
-mingw_arch=('mingw32' 'mingw64' 'ucrt64' 'clang64' 'clangarm64' 'clang32')
+mingw_arch=('mingw32' 'mingw64' 'ucrt64' 'clang64' 'clangarm64')
 url='https://lib.openmpt.org/libopenmpt/'
 msys2_repository_url='https://github.com/OpenMPT/openmpt'
 msys2_references=(
@@ -20,7 +20,7 @@ depends=("${MINGW_PACKAGE_PREFIX}-jellyfin-zlib"
 makedepends=("${MINGW_PACKAGE_PREFIX}-cc"
              "${MINGW_PACKAGE_PREFIX}-autotools")
 source=("https://lib.openmpt.org/files/${_realname}/src/${_realname}-${pkgver}+release.autotools.tar.gz")
-sha256sums=('79ab3ce3672601e525b5cc944f026c80c03032f37d39caa84c8ca3fdd75e0c98')
+sha256sums=('dcd7cde4f9c498eb496c4556e1c1b81353e2a74747e8270a42565117ea42e1f1')
 
 export MINGW_TOOLCHAIN_PREFIX="${MINGW_PREFIX}"
 export FF_MINGW_PREFIX="${MINGW_TOOLCHAIN_PREFIX}/ffbuild"

@@ -295,7 +295,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
   *
   * This file is part of FFmpeg.
   *
-@@ -19,569 +20,1023 @@
+@@ -19,569 +20,1028 @@
   * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
   */
  
@@ -581,6 +581,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +            avctx->codec_id == AV_CODEC_ID_AV1;
 +        break;
 +    case AV_PIX_FMT_YUV422P:
++    case AV_PIX_FMT_YUVJ422P:
 +        pix_fmts[1] = AV_PIX_FMT_NV16;
 +        is_fmt_supported =
 +            avctx->codec_id == AV_CODEC_ID_H264;
@@ -591,6 +592,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +            avctx->codec_id == AV_CODEC_ID_H264;
 +        break;
 +    case AV_PIX_FMT_YUV444P:
++    case AV_PIX_FMT_YUVJ444P:
 +        pix_fmts[1] = AV_PIX_FMT_NV24;
 +        is_fmt_supported =
 +            avctx->codec_id == AV_CODEC_ID_HEVC;
@@ -752,13 +754,16 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 -       ret = AVERROR_UNKNOWN;
 -       goto fail;
 +    if (avctx->hw_device_ctx) {
-+        r->hwdevice = av_buffer_ref(avctx->hw_device_ctx);
-+        if (!r->hwdevice) {
-+            ret = AVERROR(ENOMEM);
-+            goto fail;
++        AVBufferRef *device_ref = avctx->hw_device_ctx;
++        AVHWDeviceContext *device_ctx = (AVHWDeviceContext *)device_ref->data;
++
++        if (device_ctx && device_ctx->type == AV_HWDEVICE_TYPE_RKMPP) {
++            r->hwdevice = av_buffer_ref(avctx->hw_device_ctx);
++            if (r->hwdevice)
++                av_log(avctx, AV_LOG_VERBOSE, "Picked up an existing RKMPP hardware device\n");
 +        }
-+        av_log(avctx, AV_LOG_VERBOSE, "Picked up an existing RKMPP hardware device\n");
-+    } else {
++    }
++    if (!r->hwdevice) {
 +        if ((ret = av_hwdevice_ctx_create(&r->hwdevice, AV_HWDEVICE_TYPE_RKMPP, NULL, NULL, 0)) < 0) {
 +            av_log(avctx, AV_LOG_ERROR, "Failed to create a RKMPP hardware device: %d\n", ret);
 +            goto fail;
@@ -1906,7 +1911,7 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavcodec/rkmppenc.c
-@@ -0,0 +1,1116 @@
+@@ -0,0 +1,1134 @@
 +/*
 + * Copyright (c) 2023 Huseyin BIYIK
 + * Copyright (c) 2023 NyanMisaka
@@ -1950,8 +1955,11 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 +{
 +    switch (pix_fmt) {
 +    case AV_PIX_FMT_GRAY8:   return MPP_FMT_YUV400;
++    case AV_PIX_FMT_YUVJ420P:
 +    case AV_PIX_FMT_YUV420P: return MPP_FMT_YUV420P;
++    case AV_PIX_FMT_YUVJ422P:
 +    case AV_PIX_FMT_YUV422P: return MPP_FMT_YUV422P;
++    case AV_PIX_FMT_YUVJ444P:
 +    case AV_PIX_FMT_YUV444P: return MPP_FMT_YUV444P;
 +    case AV_PIX_FMT_NV12:    return MPP_FMT_YUV420SP;
 +    case AV_PIX_FMT_NV21:    return MPP_FMT_YUV420SP_VU;
@@ -1977,6 +1985,7 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 +static MppFrameFormat rkmpp_get_mpp_fmt_mjpeg(enum AVPixelFormat pix_fmt)
 +{
 +    switch (pix_fmt) {
++    case AV_PIX_FMT_YUVJ420P:
 +    case AV_PIX_FMT_YUV420P:   return MPP_FMT_YUV420P;
 +    case AV_PIX_FMT_NV12:      return MPP_FMT_YUV420SP;
 +    case AV_PIX_FMT_YUYV422:   return MPP_FMT_YUV422_YUYV;
@@ -2201,7 +2210,13 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 +    mpp_enc_cfg_set_s32(cfg, "prep:colorspace", avctx->colorspace);
 +    mpp_enc_cfg_set_s32(cfg, "prep:colorprim", avctx->color_primaries);
 +    mpp_enc_cfg_set_s32(cfg, "prep:colortrc", avctx->color_trc);
++
 +    mpp_enc_cfg_set_s32(cfg, "prep:colorrange", avctx->color_range);
++    if (r->pix_fmt == AV_PIX_FMT_YUVJ420P ||
++        r->pix_fmt == AV_PIX_FMT_YUVJ422P ||
++        r->pix_fmt == AV_PIX_FMT_YUVJ444P) {
++        mpp_enc_cfg_set_s32(cfg, "prep:colorrange", AVCOL_RANGE_JPEG);
++    }
 +
 +    if (is_afbc) {
 +        const AVDRMLayerDescriptor *layer = &drm_desc->layers[0];
@@ -2524,7 +2539,9 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 +
 +    /* planar YUV quirks */
 +    if ((r->pix_fmt == AV_PIX_FMT_YUV420P ||
++         r->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +         r->pix_fmt == AV_PIX_FMT_YUV422P ||
++         r->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +         r->pix_fmt == AV_PIX_FMT_NV24) && (drm_frame->width % 2)) {
 +        av_log(avctx, AV_LOG_ERROR, "Unsupported width '%d', not 2-aligned\n",
 +               drm_frame->width);
@@ -2545,7 +2562,13 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 +    mpp_frame_set_colorspace(mpp_frame, avctx->colorspace);
 +    mpp_frame_set_color_primaries(mpp_frame, avctx->color_primaries);
 +    mpp_frame_set_color_trc(mpp_frame, avctx->color_trc);
++
 +    mpp_frame_set_color_range(mpp_frame, avctx->color_range);
++    if (r->pix_fmt == AV_PIX_FMT_YUVJ420P ||
++        r->pix_fmt == AV_PIX_FMT_YUVJ422P ||
++        r->pix_fmt == AV_PIX_FMT_YUVJ444P) {
++        mpp_frame_set_color_range(mpp_frame, AVCOL_RANGE_JPEG);
++    }
 +
 +    layer = &drm_desc->layers[0];
 +    plane0 = &layer->planes[0];
@@ -3027,7 +3050,7 @@ Index: FFmpeg/libavcodec/rkmppenc.h
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavcodec/rkmppenc.h
-@@ -0,0 +1,276 @@
+@@ -0,0 +1,280 @@
 +/*
 + * Copyright (c) 2023 Huseyin BIYIK
 + * Copyright (c) 2023 NyanMisaka
@@ -3216,8 +3239,11 @@ Index: FFmpeg/libavcodec/rkmppenc.h
 +static const enum AVPixelFormat rkmpp_enc_pix_fmts_h26x[] = {
 +    AV_PIX_FMT_GRAY8,
 +    AV_PIX_FMT_YUV420P,
++    AV_PIX_FMT_YUVJ420P,
 +    AV_PIX_FMT_YUV422P,
++    AV_PIX_FMT_YUVJ422P,
 +    AV_PIX_FMT_YUV444P,
++    AV_PIX_FMT_YUVJ444P,
 +    AV_PIX_FMT_NV12,
 +    AV_PIX_FMT_NV21,
 +    AV_PIX_FMT_NV16,
@@ -3241,6 +3267,7 @@ Index: FFmpeg/libavcodec/rkmppenc.h
 +
 +static const enum AVPixelFormat rkmpp_enc_pix_fmts_mjpeg[] = {
 +    AV_PIX_FMT_YUV420P,
++    AV_PIX_FMT_YUVJ420P,
 +    AV_PIX_FMT_NV12,
 +    AV_PIX_FMT_YUYV422,
 +    AV_PIX_FMT_UYVY422,
@@ -3380,7 +3407,7 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/rkrga_common.c
-@@ -0,0 +1,1326 @@
+@@ -0,0 +1,1357 @@
 +/*
 + * Copyright (c) 2023 NyanMisaka
 + *
@@ -3431,7 +3458,9 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +#define YUV_FORMATS \
 +    { AV_PIX_FMT_GRAY8,    RK_FORMAT_YCbCr_400 },        /* RGA2 only */ \
 +    { AV_PIX_FMT_YUV420P,  RK_FORMAT_YCbCr_420_P },      /* RGA2 only */ \
++    { AV_PIX_FMT_YUVJ420P, RK_FORMAT_YCbCr_420_P },      /* RGA2 only */ \
 +    { AV_PIX_FMT_YUV422P,  RK_FORMAT_YCbCr_422_P },      /* RGA2 only */ \
++    { AV_PIX_FMT_YUVJ422P, RK_FORMAT_YCbCr_422_P },      /* RGA2 only */ \
 +    { AV_PIX_FMT_NV12,     RK_FORMAT_YCbCr_420_SP }, \
 +    { AV_PIX_FMT_NV21,     RK_FORMAT_YCrCb_420_SP }, \
 +    { AV_PIX_FMT_NV16,     RK_FORMAT_YCbCr_422_SP }, \
@@ -3704,6 +3733,13 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +            out->color_primaries = AVCOL_PRI_UNSPECIFIED;
 +            out->color_range     = AVCOL_RANGE_JPEG;
 +        }
++    }
++
++    /* yuvj2yuv */
++    if ((in_info->pix_fmt == AV_PIX_FMT_YUVJ420P ||
++         in_info->pix_fmt == AV_PIX_FMT_YUVJ422P) &&
++        !(out_info->pix_desc->flags & AV_PIX_FMT_FLAG_RGB)) {
++        out->color_range = AVCOL_RANGE_JPEG;
 +    }
 +}
 +
@@ -4195,7 +4231,9 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +    if (!r->has_rga2 &&
 +        (src->pix_fmt == AV_PIX_FMT_GRAY8 ||
 +         src->pix_fmt == AV_PIX_FMT_YUV420P ||
++         src->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +         src->pix_fmt == AV_PIX_FMT_YUV422P ||
++         src->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +         src->pix_fmt == AV_PIX_FMT_RGB555LE ||
 +         src->pix_fmt == AV_PIX_FMT_BGR555LE)) {
 +        av_log(avctx, AV_LOG_ERROR, "'%s' as input is only supported by RGA2\n",
@@ -4206,7 +4244,9 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +    if (!r->has_rga2 &&
 +        (dst->pix_fmt == AV_PIX_FMT_GRAY8 ||
 +         dst->pix_fmt == AV_PIX_FMT_YUV420P ||
++         dst->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +         dst->pix_fmt == AV_PIX_FMT_YUV422P ||
++         dst->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +         dst->pix_fmt == AV_PIX_FMT_RGB555LE ||
 +         dst->pix_fmt == AV_PIX_FMT_BGR555LE ||
 +         dst->pix_fmt == AV_PIX_FMT_ARGB ||
@@ -4217,12 +4257,24 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +               av_get_pix_fmt_name(dst->pix_fmt));
 +        return AVERROR(ENOSYS);
 +    }
++    /* non-YUVJ format to YUVJ format is not supported */
++    if ((dst->pix_fmt == AV_PIX_FMT_YUVJ420P ||
++         dst->pix_fmt == AV_PIX_FMT_YUVJ422P) &&
++         (src->pix_fmt != AV_PIX_FMT_YUVJ420P &&
++          src->pix_fmt != AV_PIX_FMT_YUVJ422P)) {
++        av_log(avctx, AV_LOG_ERROR, "'%s' to '%s' is not supported\n",
++               av_get_pix_fmt_name(src->pix_fmt),
++               av_get_pix_fmt_name(dst->pix_fmt));
++        return AVERROR(ENOSYS);
++    }
 +    /* P010/P210 requires RGA3 but it can't handle certain formats */
 +    if ((src->pix_fmt == AV_PIX_FMT_P010 ||
 +         src->pix_fmt == AV_PIX_FMT_P210) &&
 +         (dst->pix_fmt == AV_PIX_FMT_GRAY8 ||
 +          dst->pix_fmt == AV_PIX_FMT_YUV420P ||
++          dst->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +          dst->pix_fmt == AV_PIX_FMT_YUV422P ||
++          dst->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +          dst->pix_fmt == AV_PIX_FMT_RGB555LE ||
 +          dst->pix_fmt == AV_PIX_FMT_BGR555LE ||
 +          dst->pix_fmt == AV_PIX_FMT_ARGB ||
@@ -4239,7 +4291,9 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +         dst->pix_fmt == AV_PIX_FMT_P210) &&
 +         (src->pix_fmt == AV_PIX_FMT_GRAY8 ||
 +          src->pix_fmt == AV_PIX_FMT_YUV420P ||
++          src->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +          src->pix_fmt == AV_PIX_FMT_YUV422P ||
++          src->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +          src->pix_fmt == AV_PIX_FMT_RGB555LE ||
 +          src->pix_fmt == AV_PIX_FMT_BGR555LE)) {
 +        av_log(avctx, AV_LOG_ERROR, "'%s' to '%s' is not supported\n",
@@ -4250,14 +4304,18 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +
 +    if (src->pix_fmt == AV_PIX_FMT_GRAY8 ||
 +        src->pix_fmt == AV_PIX_FMT_YUV420P ||
++        src->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +        src->pix_fmt == AV_PIX_FMT_YUV422P ||
++        src->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +        src->pix_fmt == AV_PIX_FMT_NV24 ||
 +        src->pix_fmt == AV_PIX_FMT_NV42 ||
 +        src->pix_fmt == AV_PIX_FMT_RGB555LE ||
 +        src->pix_fmt == AV_PIX_FMT_BGR555LE ||
 +        dst->pix_fmt == AV_PIX_FMT_GRAY8 ||
 +        dst->pix_fmt == AV_PIX_FMT_YUV420P ||
++        dst->pix_fmt == AV_PIX_FMT_YUVJ420P ||
 +        dst->pix_fmt == AV_PIX_FMT_YUV422P ||
++        dst->pix_fmt == AV_PIX_FMT_YUVJ422P ||
 +        dst->pix_fmt == AV_PIX_FMT_NV24 ||
 +        dst->pix_fmt == AV_PIX_FMT_NV42 ||
 +        dst->pix_fmt == AV_PIX_FMT_RGB555LE ||
@@ -5956,7 +6014,7 @@ Index: FFmpeg/libavutil/hwcontext_rkmpp.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavutil/hwcontext_rkmpp.c
-@@ -0,0 +1,600 @@
+@@ -0,0 +1,603 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -6004,8 +6062,11 @@ Index: FFmpeg/libavutil/hwcontext_rkmpp.c
 +    { AV_PIX_FMT_GRAY8,     DRM_FORMAT_R8,       },
 +    /* fully-planar YUV */
 +    { AV_PIX_FMT_YUV420P,   DRM_FORMAT_YUV420,   },
++    { AV_PIX_FMT_YUVJ420P,  DRM_FORMAT_YUV420,   },
 +    { AV_PIX_FMT_YUV422P,   DRM_FORMAT_YUV422,   },
++    { AV_PIX_FMT_YUVJ422P,  DRM_FORMAT_YUV422,   },
 +    { AV_PIX_FMT_YUV444P,   DRM_FORMAT_YUV444,   },
++    { AV_PIX_FMT_YUVJ444P,  DRM_FORMAT_YUV444,   },
 +    /* semi-planar YUV */
 +    { AV_PIX_FMT_NV12,      DRM_FORMAT_NV12,     },
 +    { AV_PIX_FMT_NV21,      DRM_FORMAT_NV21,     },
