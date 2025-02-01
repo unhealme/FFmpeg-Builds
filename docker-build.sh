@@ -74,6 +74,10 @@ prepare_extra_common() {
     fi
     git clone -b ${libxml2_ver} --depth=1 https://github.com/GNOME/libxml2.git
     pushd libxml2
+    if [[ $(lsb_release -c -s) != "focal" ]]; then
+        # Fallback to internal entropy when system native method failed
+        git apply ${SOURCE_DIR}/builder/patches/libxml2/v2.13.5/0001-dict-Fallback-to-internal-entropy.patch
+    fi
     ./autogen.sh \
         ${CROSS_OPT} \
         --prefix=${TARGET_DIR} \
