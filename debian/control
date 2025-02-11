@@ -42,11 +42,11 @@ Build-Depends:
 # --enable-libzvbi
  libzvbi-dev,
 # --enable-cuda-llvm
- clang [!armhf !arm64],
+ clang:amd64 [!armhf],
 # --enable-opencl
  ocl-icd-opencl-dev,
 # used to detect libraries
- pkg-config,
+ pkg-config | pkgconf,
 # HTML documentation
  texinfo,
 # assembler optimizations

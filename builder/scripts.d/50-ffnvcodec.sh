@@ -5,7 +5,6 @@ SCRIPT_COMMIT="451da99614412a7f9526ef301a5ee0c7a6f9ad76"
 
 ffbuild_enabled() {
     [[ $TARGET == mac* ]] && return -1
-    [[ $TARGET == *arm64 ]] && return -1
     return 0
 }
 

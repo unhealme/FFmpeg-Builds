@@ -240,7 +240,7 @@ prepare_extra_common() {
 
     # DAV1D
     pushd ${SOURCE_DIR}
-    git clone -b 1.5.0 --depth=1 https://code.videolan.org/videolan/dav1d.git
+    git clone -b 1.5.1 --depth=1 https://code.videolan.org/videolan/dav1d.git
     meson setup dav1d dav1d_build \
         ${MESON_CROSS_OPT} \
         --prefix=${TARGET_DIR} \
@@ -285,24 +285,24 @@ prepare_extra_common() {
     echo "fdk-aac-stripped${TARGET_DIR}/lib/libfdk-aac.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
     popd
     popd
-}
 
-# Prepare extra headers, libs and drivers for x86_64-linux-gnu
-prepare_extra_amd64() {
     # FFNVCODEC
     pushd ${SOURCE_DIR}
     git clone -b n12.0.16.1 --depth=1 https://github.com/FFmpeg/nv-codec-headers.git
     pushd nv-codec-headers
-    make && make install
+    make PREFIX=${TARGET_DIR} install
     popd
     popd
+}
 
+# Prepare extra headers, libs and drivers for x86_64-linux-gnu
+prepare_extra_amd64() {
     # AMF
     # https://www.ffmpeg.org/general.html#AMD-AMF_002fVCE
     pushd ${SOURCE_DIR}
     mkdir amf-headers
     pushd amf-headers
-    amf_ver="1.4.35"
+    amf_ver="1.4.36"
     amf_link="https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v${amf_ver}/AMF-headers-v${amf_ver}.tar.gz"
     wget ${amf_link} -O amf.tar.gz
     tar xaf amf.tar.gz
@@ -437,7 +437,7 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-25.1.0 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.1.1 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
@@ -457,7 +457,7 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-25.1.0 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.1.1 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
     wget -q -O - https://github.com/intel/media-driver/commit/d5dd47b.patch | git apply
@@ -480,7 +480,7 @@ prepare_extra_amd64() {
 
     # Vulkan Headers
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.305 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
+    git clone -b v1.4.307 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
     pushd Vulkan-Headers
     mkdir build && pushd build
     cmake \
@@ -493,7 +493,7 @@ prepare_extra_amd64() {
 
     # Vulkan ICD Loader
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.305 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
+    git clone -b v1.4.307 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
     pushd Vulkan-Loader
     mkdir build && pushd build
     cmake \

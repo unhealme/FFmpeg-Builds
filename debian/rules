@@ -77,6 +77,12 @@ CONFIG_ARM := --arch=armhf \
 CONFIG_ARM64 := --arch=arm64 \
 	--cross-prefix=/usr/bin/aarch64-linux-gnu- \
 	${CONFIG_ARM_COMMON} \
+	--enable-ffnvcodec \
+	--enable-cuda \
+	--enable-cuda-llvm \
+	--enable-cuvid \
+	--enable-nvdec \
+	--enable-nvenc \
 
 HOST_ARCH := $(shell arch)
 BUILD_ARCH := ${DEB_HOST_MULTIARCH}
