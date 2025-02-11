@@ -285,18 +285,18 @@ prepare_extra_common() {
     echo "fdk-aac-stripped${TARGET_DIR}/lib/libfdk-aac.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
     popd
     popd
-}
 
-# Prepare extra headers, libs and drivers for x86_64-linux-gnu
-prepare_extra_amd64() {
     # FFNVCODEC
     pushd ${SOURCE_DIR}
     git clone -b n12.0.16.1 --depth=1 https://github.com/FFmpeg/nv-codec-headers.git
     pushd nv-codec-headers
-    make && make install
+    make PREFIX=${TARGET_DIR} install
     popd
     popd
+}
 
+# Prepare extra headers, libs and drivers for x86_64-linux-gnu
+prepare_extra_amd64() {
     # AMF
     # https://www.ffmpeg.org/general.html#AMD-AMF_002fVCE
     pushd ${SOURCE_DIR}
