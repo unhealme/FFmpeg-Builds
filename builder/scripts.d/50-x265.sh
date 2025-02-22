@@ -28,6 +28,17 @@ ffbuild_dockerbuild() {
         )
     fi
 
+    # Wa for https://bitbucket.org/multicoreware/x265_git/issues/984/illegal-instruction-neon_dotprod-crashes
+    if [[ $TARGET == linuxarm64 ]]; then
+        common_config+=(
+            -DENABLE_NEON=ON
+            -DENABLE_NEON_DOTPROD=OFF
+            -DENABLE_NEON_I8MM=OFF
+            -DENABLE_SVE=OFF
+            -DENABLE_SVE2=OFF
+        )
+    fi
+
     if [[ $TARGET != *32 ]]; then
         mkdir 8bit 10bit 12bit
         cmake "${common_config[@]}" -DHIGH_BIT_DEPTH=ON -DEXPORT_C_API=OFF -DENABLE_HDR10_PLUS=ON -DMAIN12=ON -S source -B 12bit &
