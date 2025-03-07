@@ -436,12 +436,13 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 ===================================================================
 --- FFmpeg.orig/libavfilter/opencl/tonemap.cl
 +++ FFmpeg/libavfilter/opencl/tonemap.cl
-@@ -16,54 +16,67 @@
+@@ -16,54 +16,68 @@
   * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
   */
  
 -#define REFERENCE_WHITE 100.0f
 +#define FLOAT_EPS 1e-6f
++#define LUT_SIZE 65
 +
  extern float3 lrgb2yuv(float3);
  extern float  lrgb2y(float3);
@@ -525,7 +526,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +84,423 @@ float mobius(float s, float peak) {
+@@ -71,202 +85,606 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -780,6 +781,11 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +#endif
 +    return c;
 +}
++
++#ifdef DOVI_RESHAPE
++float reshape_poly(float s, float4 coeffs) {
++    return (coeffs.z * s + coeffs.y) * s + coeffs.x;
++}
  
 -    // Rescale the variables in order to bring it into a representation where
 -    // 1.0 represents the dst_peak. This is because all of the tone mapping
@@ -787,11 +793,6 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 -    if (target_peak > 1.0f) {
 -        sig *= 1.0f / target_peak;
 -        peak *= 1.0f / target_peak;
-+#ifdef DOVI_RESHAPE
-+float reshape_poly(float s, float4 coeffs) {
-+    return (coeffs.z * s + coeffs.y) * s + coeffs.x;
-+}
-+
 +float reshape_mmr(float3 sig,
 +                  float4 coeffs,
 +                  __global float4 *dovi_mmr,
@@ -1113,6 +1114,189 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +#else
 +    write_imagef(dst2, (int2)(xi, yi), (float4)(chroma.y, chroma.z, 0.0f, 1.0f));
 +#endif
++}
++
++float3 apply_lut3d(__global float3 *lut, float3 color)
++{
++    // Scale the color to the LUT grid.
++    float3 pos = color * (float)(LUT_SIZE - 1);
++
++    // Get the integer base indices in the LUT.
++    int3 base = convert_int3(floor(pos));
++    // Compute the fractional part within the cell.
++    float3 f = pos - convert_float3(base);
++
++    // Compute the base linear index.
++    int baseIndex = base.x + base.y * LUT_SIZE + base.z * LUT_SIZE * LUT_SIZE;
++
++    // Fetch the eight corner values of the current cube cell.
++    float3 c000 = lut[baseIndex];
++    float3 c100 = lut[baseIndex + 1];
++    float3 c010 = lut[baseIndex + LUT_SIZE];
++    float3 c110 = lut[baseIndex + 1 + LUT_SIZE];
++    float3 c001 = lut[baseIndex + LUT_SIZE * LUT_SIZE];
++    float3 c101 = lut[baseIndex + 1 + LUT_SIZE * LUT_SIZE];
++    float3 c011 = lut[baseIndex + LUT_SIZE + LUT_SIZE * LUT_SIZE];
++    float3 c111 = lut[baseIndex + 1 + LUT_SIZE + LUT_SIZE * LUT_SIZE];
++
++    // Determine the tetrahedron within the cube cell.
++    // The tetrahedron selection is based on the ordering of the fractional parts.
++    // There are 6 possibilities, we calculate them all to reduce branching on GPU.
++    float3 cxyz = c000 + f.x * (c100 - c000) + f.y * (c110 - c100) + f.z * (c111 - c110);
++    float3 cxzy = c000 + f.x * (c100 - c000) + f.z * (c101 - c100) + f.y * (c111 - c101);
++    float3 czxy = c000 + f.z * (c001 - c000) + f.x * (c101 - c001) + f.y * (c111 - c101);
++    float3 cyxz = c000 + f.y * (c010 - c000) + f.x * (c110 - c010) + f.z * (c111 - c110);
++    float3 cyzx = c000 + f.y * (c010 - c000) + f.z * (c011 - c010) + f.x * (c111 - c011);
++    float3 czyx = c000 + f.z * (c001 - c000) + f.y * (c011 - c001) + f.x * (c111 - c011);
++
++    // Now select based on f
++    float3 result = select(
++                           select(
++                                  cxyz,
++                                  select(cxzy,
++                                         czxy,
++                                         (int3)(f.x >= f.z)),
++                                  (int3)(f.y >= f.z)),
++                           select(cyxz,
++                                  select(cyzx,
++                                         czyx,
++                                         (int3)(f.y >= f.z)),
++                                  (int3)(f.x >= f.z)),
++                           (int3)(f.x >= f.y));
++
++    return clamp(result, 0.0f, 1.0f);
++}
++
++__kernel void tonemap_lut(__global float3 *lut,
++                          __write_only image2d_t dst1,
++                          __read_only  image2d_t src1,
++                          __write_only image2d_t dst2,
++                          __read_only  image2d_t src2,
++#ifdef NON_SEMI_PLANAR_OUT
++                          __write_only image2d_t dst3,
++#endif
++#ifdef NON_SEMI_PLANAR_IN
++                          __read_only  image2d_t src3,
++#endif
++#ifdef ENABLE_DITHER
++                          __read_only  image2d_t dither,
++#endif
++#ifdef DOVI_RESHAPE
++                          __global float *dovi_buf,
++#endif
++                          float peak)
++{
++    int xi = get_global_id(0);
++    int yi = get_global_id(1);
++    // each work item process four pixels
++    int x = 2 * xi;
++    int y = 2 * yi;
++
++    int2 src1_sz = get_image_dim(src1);
++    int2 dst2_sz = get_image_dim(dst2);
++
++    if (xi >= dst2_sz.x || yi >= dst2_sz.y)
++        return;
++
++    float2 src1_sz_recip = native_recip(convert_float2(src1_sz));
++    float2 ncoords_yuv0 = convert_float2((int2)(x,     y)) * src1_sz_recip;
++    float2 ncoords_yuv1 = convert_float2((int2)(x + 1, y)) * src1_sz_recip;
++    float2 ncoords_yuv2 = convert_float2((int2)(x,     y + 1)) * src1_sz_recip;
++    float2 ncoords_yuv3 = convert_float2((int2)(x + 1, y + 1)) * src1_sz_recip;
++
++    float3 yuv0, yuv1, yuv2, yuv3;
++
++    yuv0.x = read_imagef(src1, sampler, (int2)(x,     y)).x;
++    yuv1.x = read_imagef(src1, sampler, (int2)(x + 1, y)).x;
++    yuv2.x = read_imagef(src1, sampler, (int2)(x,     y + 1)).x;
++    yuv3.x = read_imagef(src1, sampler, (int2)(x + 1, y + 1)).x;
++
++#ifdef NON_SEMI_PLANAR_IN
++    yuv0.yz = (float2)(read_imagef(src2, l_sampler, ncoords_yuv0).x,
++                       read_imagef(src3, l_sampler, ncoords_yuv0).x);
++    yuv1.yz = (float2)(read_imagef(src2, l_sampler, ncoords_yuv1).x,
++                       read_imagef(src3, l_sampler, ncoords_yuv1).x);
++    yuv2.yz = (float2)(read_imagef(src2, l_sampler, ncoords_yuv2).x,
++                       read_imagef(src3, l_sampler, ncoords_yuv2).x);
++    yuv3.yz = (float2)(read_imagef(src2, l_sampler, ncoords_yuv3).x,
++                       read_imagef(src3, l_sampler, ncoords_yuv3).x);
++#else
++    yuv0.yz = read_imagef(src2, l_sampler, ncoords_yuv0).xy;
++    yuv1.yz = read_imagef(src2, l_sampler, ncoords_yuv1).xy;
++    yuv2.yz = read_imagef(src2, l_sampler, ncoords_yuv2).xy;
++    yuv3.yz = read_imagef(src2, l_sampler, ncoords_yuv3).xy;
++#endif
++
++#ifdef DOVI_RESHAPE
++    __global float *dovi_params = dovi_buf;
++    __global float *dovi_pivots = dovi_buf + 24;
++    __global float4 *dovi_coeffs = (__global float4 *)(dovi_buf + 48);
++    __global float4 *dovi_mmr = (__global float4 *)(dovi_buf + 144);
++    yuv0 = reshape_dovi_yuv(yuv0, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
++    yuv1 = reshape_dovi_yuv(yuv1, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
++    yuv2 = reshape_dovi_yuv(yuv2, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
++    yuv3 = reshape_dovi_yuv(yuv3, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
++#endif
++
++    float3 c0, c1, c2, c3;
++
++    c0 = apply_lut3d(lut, yuv0);
++    c1 = apply_lut3d(lut, yuv1);
++    c2 = apply_lut3d(lut, yuv2);
++    c3 = apply_lut3d(lut, yuv3);
++
++    float3 chroma = get_chroma_sample(c0, c1, c2, c3);
++
++    write_imagef(dst1, (int2)(x,     y), (float4)(c0.x, 0.0f, 0.0f, 1.0f));
++    write_imagef(dst1, (int2)(x + 1, y), (float4)(c1.x, 0.0f, 0.0f, 1.0f));
++    write_imagef(dst1, (int2)(x,     y + 1), (float4)(c2.x, 0.0f, 0.0f, 1.0f));
++    write_imagef(dst1, (int2)(x + 1, y + 1), (float4)(c3.x, 0.0f, 0.0f, 1.0f));
++#ifdef NON_SEMI_PLANAR_OUT
++    write_imagef(dst2, (int2)(xi, yi), (float4)(chroma.y, 0.0f, 0.0f, 1.0f));
++    write_imagef(dst3, (int2)(xi, yi), (float4)(chroma.z, 0.0f, 0.0f, 1.0f));
++#else
++    write_imagef(dst2, (int2)(xi, yi), (float4)(chroma.y, chroma.z, 0.0f, 1.0f));
++#endif
++}
++
++__kernel void build_lut(__global float3* lut, float peak)
++{
++    const int total_entries = LUT_SIZE * LUT_SIZE * LUT_SIZE;
++    int idx = get_global_id(0);
++    if (idx >= total_entries) return;
++    int z = idx / (LUT_SIZE * LUT_SIZE);
++    int rem = idx - (z * LUT_SIZE * LUT_SIZE);
++    int y = rem / LUT_SIZE;
++    int x = rem % LUT_SIZE;
++    float fx = (float)x / (LUT_SIZE - 1);
++    float fy = (float)y / (LUT_SIZE - 1);
++    float fz = (float)z / (LUT_SIZE - 1);
++    float3 c = (float3)(fx, fy, fz);
++#ifndef MAP_IN_DST_SPACE
++    c = map_to_src_space_from_yuv(c);
++#else
++    c = map_to_dst_space_from_yuv(c);
++#endif
++    float4 r4 = (float4)(c.x, c.x, c.x, c.x);
++    float4 g4 = (float4)(c.y, c.y, c.y, c.y);
++    float4 b4 = (float4)(c.z, c.z, c.z, c.z);
++#ifndef SKIP_TONEMAP
++  #ifdef TONE_MODE_ITP
++    map_four_pixels_itp(&r4, &g4, &b4, peak);
++  #else
++    map_four_pixels_rgb(&r4, &g4, &b4, peak);
++  #endif
++#endif
++    c = (float3)(r4.x, g4.x, b4.x);
++#ifndef MAP_IN_DST_SPACE
++    c = lrgb2lrgb(c);
++  #ifndef RGB2RGB_PASSTHROUGH
++    c = gamut_compress(c);
++  #endif
++    c = clamp(c, 0.0f, 1.0f);
++#endif
++    c = lrgb2yuv(c);
++    lut[idx] = clamp(c, 0.0f, 1.0f);
  }
 Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 ===================================================================
@@ -1190,8 +1374,6 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +    const AVPixFmtDescriptor *in_desc, *out_desc;
 +    int in_planes, out_planes;
 +
-+    float *lin_lut;
-+
 +#define params_cnt 8
 +#define pivots_cnt (7+1)
 +#define coeffs_cnt 8*4
@@ -1217,7 +1399,9 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
      int                   initialised;
 +    int                   init_with_dovi;
      cl_kernel             kernel;
++    cl_kernel             lut_generation_kernel;
 +    cl_mem                dither_image;
++    cl_mem                lut_buffer;
      cl_command_queue      command_queue;
 -    cl_mem                util_mem;
  } TonemapOpenCLContext;
@@ -1239,7 +1423,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
      [TONEMAP_NONE]     = "direct",
      [TONEMAP_LINEAR]   = "linear",
      [TONEMAP_GAMMA]    = "gamma",
-@@ -88,8 +129,54 @@ static const char *const tonemap_func[TO
+@@ -88,8 +129,18 @@ static const char *const tonemap_func[TO
      [TONEMAP_REINHARD] = "reinhard",
      [TONEMAP_HABLE]    = "hable",
      [TONEMAP_MOBIUS]   = "mobius",
@@ -1253,48 +1437,12 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +    { 0.01736321, -0.04725154,  1.03004253},
 +};
 +
-+static float linearize(float x, float ref_white, enum AVColorTransferCharacteristic trc_in)
-+{
-+    if (trc_in == AVCOL_TRC_SMPTE2084)
-+        return eotf_st2084(x, ref_white);
-+    if (trc_in == AVCOL_TRC_ARIB_STD_B67)
-+        return eotf_arib_b67(x);
-+    return x;
-+}
-+
-+#define LUT_SIZE (1 << 10)
-+static int compute_trc_luts(AVFilterContext *avctx)
-+{
-+    TonemapOpenCLContext *ctx = avctx->priv;
-+    int i;
-+
-+    if (!ctx->lin_lut && !(ctx->lin_lut = av_calloc(LUT_SIZE, sizeof(float))))
-+        return AVERROR(ENOMEM);
-+    for (i = 0; i < LUT_SIZE; i++) {
-+        float x = (float)i / (LUT_SIZE - 1);
-+        ctx->lin_lut[i] = FFMAX(linearize(x, REFERENCE_WHITE_ALT, ctx->trc_in), 0.0f);
-+    }
-+
-+    return 0;
-+}
-+
-+static void print_opencl_const_trc_luts(AVFilterContext *avctx, AVBPrint *buf)
-+{
-+    TonemapOpenCLContext *ctx = avctx->priv;
-+    int i;
-+
-+    if (ctx->lin_lut) {
-+        av_bprintf(buf, "__constant float lin_lut[%d] = {\n", LUT_SIZE);
-+        for (i = 0; i < LUT_SIZE; i++)
-+            av_bprintf(buf, " %.13ff,", ctx->lin_lut[i]);
-+        av_bprintf(buf, "};\n");
-+    }
-+}
++#define LUT_SIZE (65 * 65 * 65)
 +
  static int get_rgb2rgb_matrix(enum AVColorPrimaries in, enum AVColorPrimaries out,
                                double rgb2rgb[3][3]) {
      double rgb2xyz[3][3], xyz2rgb[3][3];
-@@ -108,23 +195,150 @@ static int get_rgb2rgb_matrix(enum AVCol
+@@ -108,23 +159,150 @@ static int get_rgb2rgb_matrix(enum AVCol
      return 0;
  }
  
@@ -1454,7 +1602,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
  
      switch(ctx->tonemap) {
      case TONEMAP_GAMMA:
-@@ -139,59 +353,207 @@ static int tonemap_opencl_init(AVFilterC
+@@ -139,59 +317,203 @@ static int tonemap_opencl_init(AVFilterC
          if (isnan(ctx->param))
              ctx->param = 0.3f;
          break;
@@ -1536,11 +1684,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +    }
 +
 +    if (ctx->tonemap_mode == TONEMAP_MODE_AUTO) {
-+        if (ctx->tradeoff) {
-+            ctx->tonemap_mode = TONEMAP_MODE_LUM;
-+        } else {
-+            ctx->tonemap_mode = TONEMAP_MODE_ITP;
-+        }
++        ctx->tonemap_mode = TONEMAP_MODE_ITP;
 +    }
 +
 +    av_log(ctx, AV_LOG_DEBUG, "Tonemapping transfer from %s to %s\n",
@@ -1677,7 +1821,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
      av_bprintf(&header, "#define chroma_loc %d\n", (int)ctx->chroma_loc);
  
      if (rgb2rgb_passthrough)
-@@ -199,19 +561,41 @@ static int tonemap_opencl_init(AVFilterC
+@@ -199,19 +521,41 @@ static int tonemap_opencl_init(AVFilterC
      else
          ff_opencl_print_const_matrix_3x3(&header, "rgb2rgb", rgb2rgb);
  
@@ -1726,7 +1870,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
                 ctx->colorspace_out, av_color_space_name(ctx->colorspace_out));
          goto fail;
      }
-@@ -219,24 +603,23 @@ static int tonemap_opencl_init(AVFilterC
+@@ -219,24 +563,13 @@ static int tonemap_opencl_init(AVFilterC
      ff_fill_rgb2yuv_table(luma_dst, rgb2yuv);
      ff_opencl_print_const_matrix_3x3(&header, "yuv_matrix", rgb2yuv);
  
@@ -1749,27 +1893,19 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 -
 -    if (ctx->trc_out == AVCOL_TRC_ARIB_STD_B67)
 -        av_bprintf(&header, "#define inverse_ootf_impl inverse_ootf_hlg\n");
-+    if (ctx->tradeoff) {
-+        av_bprintf(&header, "#define LUT_TRC %d\n", LUT_SIZE - 1);
-+        if (ctx->trc_out != AVCOL_TRC_SMPTE2084) {
-+            av_bprintf(&header, "#define linearize %s\n", "linearize_lut");
-+            av_bprintf(&header, "#define delinearize %s\n", delinearize_funcs[ctx->trc_out]);
-+        }
-+        if (!ctx->lin_lut)
-+            if ((err = compute_trc_luts(avctx)) < 0)
-+                goto fail;
-+        print_opencl_const_trc_luts(avctx, &header);
-+    } else if (ctx->trc_out != AVCOL_TRC_SMPTE2084) {
++    if (ctx->trc_out != AVCOL_TRC_SMPTE2084) {
 +        av_bprintf(&header, "#define linearize %s\n", linearize_funcs[ctx->trc_in]);
 +        av_bprintf(&header, "#define delinearize %s\n", delinearize_funcs[ctx->trc_out]);
 +    }
  
      av_log(avctx, AV_LOG_DEBUG, "Generated OpenCL header:\n%s\n", header.str);
      opencl_sources[0] = header.str;
-@@ -254,46 +637,171 @@ static int tonemap_opencl_init(AVFilterC
+@@ -254,46 +587,206 @@ static int tonemap_opencl_init(AVFilterC
      CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to create OpenCL "
                       "command queue %d.\n", cle);
  
+-    ctx->kernel = clCreateKernel(ctx->ocf.program, "tonemap", &cle);
+-    CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to create kernel %d.\n", cle);
 +    if (ctx->in_desc->comp[0].depth > ctx->out_desc->comp[0].depth) {
 +        cl_image_format image_format = {
 +            .image_channel_data_type = CL_UNORM_INT16,
@@ -1805,8 +1941,30 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +        CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to wait for event completion: %d.\n", cle);
 +    }
 +
-     ctx->kernel = clCreateKernel(ctx->ocf.program, "tonemap", &cle);
-     CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to create kernel %d.\n", cle);
++    if (ctx->tradeoff) {
++        size_t lut_size = LUT_SIZE;
++        size_t lut_buffer_size = lut_size * sizeof(cl_float3);
++        float peak = (float)ctx->peak;
++
++        ctx->lut_generation_kernel = clCreateKernel(ctx->ocf.program, "build_lut", &cle);
++        CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to create kernel %d.\n", cle);
++
++        CL_CREATE_BUFFER_FLAGS(ctx, lut_buffer, CL_MEM_READ_WRITE, lut_buffer_size, NULL);
++        CL_SET_KERNEL_ARG(ctx->lut_generation_kernel, 0, cl_mem, &ctx->lut_buffer);
++        CL_SET_KERNEL_ARG(ctx->lut_generation_kernel, 1, cl_float, &peak);
++
++        cle = clEnqueueNDRangeKernel(ctx->command_queue, ctx->lut_generation_kernel, 1, NULL,
++                                     &lut_size, NULL,
++                                     0, NULL, NULL);
++        CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to enqueue build_lut kernel: %d.\n", cle);
++
++
++        ctx->kernel = clCreateKernel(ctx->ocf.program, "tonemap_lut", &cle);
++        CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to create kernel %d.\n", cle);
++    } else {
++        ctx->kernel = clCreateKernel(ctx->ocf.program, "tonemap", &cle);
++        CL_FAIL_ON_ERROR(AVERROR(EIO), "Failed to create kernel %d.\n", cle);
++    }
  
 -    ctx->util_mem =
 -        clCreateBuffer(ctx->ocf.hwctx->context, 0,
@@ -1831,12 +1989,14 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
          clReleaseCommandQueue(ctx->command_queue);
      if (ctx->kernel)
          clReleaseKernel(ctx->kernel);
++    if (ctx->lut_generation_kernel)
++        clReleaseKernel(ctx->lut_generation_kernel);
 +    if (event)
 +        clReleaseEvent(event);
 +    if (ctx->dither_image)
 +        clReleaseMemObject(ctx->dither_image);
-+    if (ctx->lin_lut)
-+        av_freep(&ctx->lin_lut);
++    if (ctx->lut_buffer)
++        clReleaseMemObject(ctx->lut_buffer);
      return err;
  }
  
@@ -1863,9 +2023,6 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +    TonemapOpenCLContext *ctx = avctx->priv;
 +    cl_int cle;
 +
-+    if (ctx->lin_lut)
-+        av_freep(&ctx->lin_lut);
-+
 +    if (ctx->kernel) {
 +        cle = clReleaseKernel(ctx->kernel);
 +        if (cle != CL_SUCCESS)
@@ -1873,11 +2030,25 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +                   "kernel: %d.\n", cle);
 +    }
 +
++    if (ctx->lut_generation_kernel) {
++        cle = clReleaseKernel(ctx->lut_generation_kernel);
++        if (cle != CL_SUCCESS)
++            av_log(avctx, AV_LOG_ERROR, "Failed to release "
++                                        "lut_generation_kernel: %d.\n", cle);
++    }
++
 +    if (ctx->dither_image) {
 +        cle = clReleaseMemObject(ctx->dither_image);
 +        if (cle != CL_SUCCESS)
 +            av_log(avctx, AV_LOG_ERROR, "Failed to release "
 +            "dither image: %d.\n", cle);
++    }
++
++    if (ctx->lut_buffer) {
++        cle = clReleaseMemObject(ctx->lut_buffer);
++        if (cle != CL_SUCCESS)
++            av_log(avctx, AV_LOG_ERROR, "Failed to release "
++                                        "lut buffer: %d.\n", cle);
 +    }
 +
 +    if (ctx->command_queue) {
@@ -1932,12 +2103,12 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +        av_log(ctx, AV_LOG_ERROR, "Unsupported input format: %s\n",
 +               av_get_pix_fmt_name(in_format));
 +        return AVERROR(ENOSYS);
-+    }
+     }
 +    if (!format_is_supported(out_format)) {
 +        av_log(ctx, AV_LOG_ERROR, "Unsupported output format: %s\n",
 +               av_get_pix_fmt_name(out_format));
 +        return AVERROR(ENOSYS);
-     }
++    }
 +    if (in_desc->comp[0].depth != 10 && in_desc->comp[0].depth != 16) {
 +        av_log(ctx, AV_LOG_ERROR, "Unsupported input format depth: %d\n",
 +               in_desc->comp[0].depth);
@@ -1956,7 +2127,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
      ret = ff_opencl_filter_config_output(outlink);
      if (ret < 0)
          return ret;
-@@ -308,13 +816,46 @@ static int launch_kernel(AVFilterContext
+@@ -308,13 +801,49 @@ static int launch_kernel(AVFilterContext
      size_t global_work[2];
      size_t local_work[2];
      cl_int cle;
@@ -1976,19 +2147,26 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +        err = AVERROR(EIO);
 +        goto fail;
 +    }
- 
-     CL_SET_KERNEL_ARG(kernel, 0, cl_mem, &output->data[0]);
-     CL_SET_KERNEL_ARG(kernel, 1, cl_mem, &input->data[0]);
-     CL_SET_KERNEL_ARG(kernel, 2, cl_mem, &output->data[1]);
-     CL_SET_KERNEL_ARG(kernel, 3, cl_mem, &input->data[1]);
--    CL_SET_KERNEL_ARG(kernel, 4, cl_mem, &ctx->util_mem);
--    CL_SET_KERNEL_ARG(kernel, 5, cl_float, &peak);
 +
-+    idx_arg = 4;
++    idx_arg = 0;
++    if (ctx->tradeoff) {
++        CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &ctx->lut_buffer);
++    }
++    CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &output->data[0]);
++    CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &input->data[0]);
++    CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &output->data[1]);
++    CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &input->data[1]);
++
 +    if (ctx->out_planes > 2) {
 +        CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &output->data[2]);
 +    }
-+
+ 
+-    CL_SET_KERNEL_ARG(kernel, 0, cl_mem, &output->data[0]);
+-    CL_SET_KERNEL_ARG(kernel, 1, cl_mem, &input->data[0]);
+-    CL_SET_KERNEL_ARG(kernel, 2, cl_mem, &output->data[1]);
+-    CL_SET_KERNEL_ARG(kernel, 3, cl_mem, &input->data[1]);
+-    CL_SET_KERNEL_ARG(kernel, 4, cl_mem, &ctx->util_mem);
+-    CL_SET_KERNEL_ARG(kernel, 5, cl_float, &peak);
 +    if (ctx->in_planes > 2) {
 +        CL_SET_KERNEL_ARG(kernel, idx_arg++, cl_mem, &input->data[2]);
 +    }
@@ -2005,7 +2183,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
  
      local_work[0]  = 16;
      local_work[1]  = 16;
-@@ -338,13 +879,10 @@ static int tonemap_opencl_filter_frame(A
+@@ -338,13 +867,10 @@ static int tonemap_opencl_filter_frame(A
      AVFilterContext    *avctx = inlink->dst;
      AVFilterLink     *outlink = avctx->outputs[0];
      TonemapOpenCLContext *ctx = avctx->priv;
@@ -2020,7 +2198,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
  
      av_log(ctx, AV_LOG_DEBUG, "Filter input: %s, %ux%u (%"PRId64").\n",
             av_get_pix_fmt_name(input->format),
-@@ -363,8 +901,49 @@ static int tonemap_opencl_filter_frame(A
+@@ -363,8 +889,49 @@ static int tonemap_opencl_filter_frame(A
      if (err < 0)
          goto fail;
  
@@ -2072,7 +2250,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
  
      if (ctx->trc != -1)
          output->color_trc = ctx->trc;
-@@ -385,72 +964,50 @@ static int tonemap_opencl_filter_frame(A
+@@ -385,72 +952,50 @@ static int tonemap_opencl_filter_frame(A
      ctx->range_out = output->color_range;
      ctx->chroma_loc = output->chroma_location;
  
@@ -2128,11 +2306,11 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +        av_frame_remove_side_data(output, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
 +        av_frame_remove_side_data(output, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
 +    }
-+
-+    av_frame_remove_side_data(output, AV_FRAME_DATA_DOVI_RPU_BUFFER);
-+    av_frame_remove_side_data(output, AV_FRAME_DATA_DOVI_METADATA);
  
 -    av_log(ctx, AV_LOG_DEBUG, "Tone-mapping output: %s, %ux%u (%"PRId64").\n",
++    av_frame_remove_side_data(output, AV_FRAME_DATA_DOVI_RPU_BUFFER);
++    av_frame_remove_side_data(output, AV_FRAME_DATA_DOVI_METADATA);
++
 +    av_log(ctx, AV_LOG_DEBUG, "Tonemapping output: %s, %ux%u (%"PRId64").\n",
             av_get_pix_fmt_name(output->format),
             output->width, output->height, output->pts);
@@ -2168,7 +2346,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
      av_frame_free(&input);
      av_frame_free(&output);
      return err;
-@@ -458,24 +1015,9 @@ fail:
+@@ -458,24 +1003,9 @@ fail:
  
  static av_cold void tonemap_opencl_uninit(AVFilterContext *avctx)
  {
@@ -2195,7 +2373,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
  
      ff_opencl_filter_uninit(avctx);
  }
-@@ -483,37 +1025,50 @@ static av_cold void tonemap_opencl_unini
+@@ -483,37 +1013,50 @@ static av_cold void tonemap_opencl_unini
  #define OFFSET(x) offsetof(TonemapOpenCLContext, x)
  #define FLAGS (AV_OPT_FLAG_FILTERING_PARAM | AV_OPT_FLAG_VIDEO_PARAM)
  static const AVOption tonemap_opencl_options[] = {
@@ -2244,7 +2422,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +        { "rgb",  "Per-channel based tonemap",        0, AV_OPT_TYPE_CONST, { .i64 = TONEMAP_MODE_RGB },  0, 0, FLAGS, "tonemap_mode" },
 +        { "lum",  "Relative luminance based tonemap", 0, AV_OPT_TYPE_CONST, { .i64 = TONEMAP_MODE_LUM },  0, 0, FLAGS, "tonemap_mode" },
 +        { "itp",  "ICtCp intensity based tonemap",    0, AV_OPT_TYPE_CONST, { .i64 = TONEMAP_MODE_ITP },  0, 0, FLAGS, "tonemap_mode" },
-+        { "auto", "Select based on GPU spec",         0, AV_OPT_TYPE_CONST, { .i64 = TONEMAP_MODE_AUTO }, 0, 0, FLAGS, "tonemap_mode" },
++        { "auto", "Select the preferred mode",        0, AV_OPT_TYPE_CONST, { .i64 = TONEMAP_MODE_AUTO }, 0, 0, FLAGS, "tonemap_mode" },
 +    { "transfer", "Set transfer characteristic", OFFSET(trc), AV_OPT_TYPE_INT, { .i64 = AVCOL_TRC_BT709 }, -1, INT_MAX, FLAGS, "transfer" },
 +    { "t",        "Set transfer characteristic", OFFSET(trc), AV_OPT_TYPE_INT, { .i64 = AVCOL_TRC_BT709 }, -1, INT_MAX, FLAGS, "transfer" },
 +        { "bt709",            0,       0,                 AV_OPT_TYPE_CONST, { .i64 = AVCOL_TRC_BT709 },         0, 0, FLAGS, "transfer" },
