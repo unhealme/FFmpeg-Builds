@@ -42,7 +42,7 @@ jobs:
         run: ./builder/buildmac.sh
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mac-${{ matrix.os.arch }}-portable
           path: ./builder/artifacts
@@ -76,13 +76,13 @@ jobs:
             core.setOutput('major', major)
 
       - name: Download Artifacts
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
         with:
           name: mac-${{ matrix.arch }}-portable
           path: artifact
 
       - name: Upload GH Release Assets
-        uses: shogo82148/actions-upload-release-asset@8482bd769644976d847e96fb4b9354228885e7b4 # v1.7.8
+        uses: shogo82148/actions-upload-release-asset@de98a409ed3670a31ad171b9f78ff35190cc56d6 # v1.7.9
         with:
           upload_url: ${{ github.event.release.upload_url }}
           overwrite: true
