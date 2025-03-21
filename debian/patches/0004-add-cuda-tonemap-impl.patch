@@ -1327,8 +1327,8 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 +float3 map_one_pixel_itp_mode(float3 rgb, const FFCUDAFrame& src, const FFCUDAFrame& dst) {
 +    float peak = src.peak;
 +    float r = mix(rgb.x, min(rgb.x, peak), tonemap_func == TONEMAP_BT2390);
-+    float g = mix(rgb.x, min(rgb.y, peak), tonemap_func == TONEMAP_BT2390);
-+    float b = mix(rgb.x, min(rgb.z, peak), tonemap_func == TONEMAP_BT2390);
++    float g = mix(rgb.y, min(rgb.y, peak), tonemap_func == TONEMAP_BT2390);
++    float b = mix(rgb.z, min(rgb.z, peak), tonemap_func == TONEMAP_BT2390);
 +    float3 ictcp = lrgb2ictcp(r, g, b);
 +    float dst_peak = 1.0f;
 +    ictcp.x = max(ictcp.x, FLOAT_EPS);
