@@ -40,7 +40,7 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
-@@ -0,0 +1,916 @@
+@@ -0,0 +1,921 @@
 +/*
 + * Copyright (c) 2024 Gnattu OC <gnattuoc@me.com>
 + *
@@ -628,6 +628,11 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +        *b4 *= factor_b;
 +    } else if (is_tone_mode_itp) {
 +        float4 i4_o, i4, ct4 , cp4;
++        if (is_tone_func_bt2390) {
++            *r4 = fmin(*r4, peak);
++            *g4 = fmin(*g4, peak);
++            *b4 = fmin(*b4, peak);
++        }
 +        lrgb2ictcp(*r4, *g4, *b4, &i4, &ct4, &cp4);
 +        i4 = fmax(i4, FLOAT_EPS);
 +        i4_o = i4;

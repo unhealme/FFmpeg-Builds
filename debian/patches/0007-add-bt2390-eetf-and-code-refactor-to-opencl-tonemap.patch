@@ -526,7 +526,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +85,606 @@ float mobius(float s, float peak) {
+@@ -71,202 +85,611 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -681,9 +681,9 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    float src_peak_delin_pq = inverse_eotf_st2084(peak);
 +    float dst_peak_delin_pq = inverse_eotf_st2084(1.0f);
 +  #ifdef TONE_MODE_RGB
-+    sig_r = inverse_eotf_st2084x4(sig_r);
-+    sig_g = inverse_eotf_st2084x4(sig_g);
-+    sig_b = inverse_eotf_st2084x4(sig_b);
++    sig_r = inverse_eotf_st2084x4(fmin(sig_r, peak));
++    sig_g = inverse_eotf_st2084x4(fmin(sig_g, peak));
++    sig_b = inverse_eotf_st2084x4(fmin(sig_b, peak));
 +    MAP_FOUR_PIXELS(sig_r, src_peak_delin_pq, dst_peak_delin_pq)
 +    MAP_FOUR_PIXELS(sig_g, src_peak_delin_pq, dst_peak_delin_pq)
 +    MAP_FOUR_PIXELS(sig_b, src_peak_delin_pq, dst_peak_delin_pq)
@@ -691,7 +691,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    sig_g = eotf_st2084x4(sig_g);
 +    sig_b = eotf_st2084x4(sig_b);
 +  #else
-+    sig = inverse_eotf_st2084x4(sig);
++    sig = inverse_eotf_st2084x4(fmin(sig, peak));
 +    MAP_FOUR_PIXELS(sig, src_peak_delin_pq, dst_peak_delin_pq)
 +    sig = eotf_st2084x4(sig);
 +  #endif
@@ -728,6 +728,11 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +#ifdef TONE_MODE_ITP
 +void map_four_pixels_itp(float4 *r4, float4 *g4, float4 *b4, float peak) {
 +    float4 i4_o, i4, ct4 , cp4;
++#ifdef TONE_FUNC_BT2390
++    *r4 = fmin(*r4, peak);
++    *g4 = fmin(*g4, peak);
++    *b4 = fmin(*b4, peak);
++#endif
 +    lrgb2ictcp(*r4, *g4, *b4, &i4, &ct4, &cp4);
 +    i4 = fmax(i4, FLOAT_EPS);
 +    i4_o = i4;

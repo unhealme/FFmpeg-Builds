@@ -1086,7 +1086,7 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/cuda/tonemap.cu
-@@ -0,0 +1,579 @@
+@@ -0,0 +1,583 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -1210,7 +1210,8 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 +
 +static __inline__ __device__
 +float bt2390(float s, float peak, float dst_peak) {
-+    float s_pq = inverse_eotf_st2084(s);
++    float s_clipped = min(s, peak);
++    float s_pq = inverse_eotf_st2084(s_clipped);
 +    return eotf_st2084(bt2390_common(s_pq, peak, dst_peak));
 +}
 +
@@ -1324,8 +1325,11 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 +
 +static __inline__ __device__
 +float3 map_one_pixel_itp_mode(float3 rgb, const FFCUDAFrame& src, const FFCUDAFrame& dst) {
-+    float3 ictcp = lrgb2ictcp(rgb.x, rgb.y, rgb.z);
 +    float peak = src.peak;
++    float r = mix(rgb.x, min(rgb.x, peak), tonemap_func == TONEMAP_BT2390);
++    float g = mix(rgb.x, min(rgb.y, peak), tonemap_func == TONEMAP_BT2390);
++    float b = mix(rgb.x, min(rgb.z, peak), tonemap_func == TONEMAP_BT2390);
++    float3 ictcp = lrgb2ictcp(r, g, b);
 +    float dst_peak = 1.0f;
 +    ictcp.x = max(ictcp.x, FLOAT_EPS);
 +    float i_o = ictcp.x;
