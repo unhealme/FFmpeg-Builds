@@ -1813,7 +1813,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_cuda.c
-@@ -0,0 +1,1165 @@
+@@ -0,0 +1,1167 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -1924,6 +1924,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    int tradeoff;
 +    int init_with_dovi;
 +    double param;
++    double final_param;
 +    double desat_param;
 +    double peak;
 +    double dst_peak;
@@ -1935,6 +1936,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +static av_cold int init(AVFilterContext *ctx)
 +{
 +    TonemapCUDAContext *s = ctx->priv;
++    s->final_param = NAN;
 +
 +    if (!strcmp(s->format_str, "same")) {
 +        s->format = AV_PIX_FMT_NONE;
@@ -2347,26 +2349,26 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    switch(s->tonemap) {
 +    case TONEMAP_GAMMA:
 +        if (isnan(s->param))
-+            s->param = 1.8f;
++            s->final_param = 1.8f;
 +        break;
 +    case TONEMAP_REINHARD:
 +        if (!isnan(s->param))
-+            s->param = (1.0f - s->param) / s->param;
++            s->final_param = (1.0f - s->param) / s->param;
 +        break;
 +    case TONEMAP_MOBIUS:
 +        if (isnan(s->param))
-+            s->param = 0.3f;
++            s->final_param = 0.3f;
 +        break;
 +    case TONEMAP_BT2390:
 +        if (isnan(s->param))
-+            s->param = 1.0f; // diff from the spec-defined 0.5f
++            s->final_param = 1.0f; // diff from the spec-defined 0.5f
 +        else
-+            s->param = FFMIN(FFMAX(s->param, 0.5f), 2.0f);
++            s->final_param = FFMIN(FFMAX(s->param, 0.5f), 2.0f);
 +        break;
 +    }
 +
-+    if (isnan(s->param))
-+        s->param = 1.0f;
++    if (isnan(s->final_param))
++        s->final_param = 1.0f;
 +
 +    if (s->peak)
 +        s->peak = FFMAX(s->peak / 10.0f, 1.1f);

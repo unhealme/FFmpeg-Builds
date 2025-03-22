@@ -966,7 +966,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
-@@ -0,0 +1,1157 @@
+@@ -0,0 +1,1159 @@
 +/*
 + * Copyright (c) 2024 Gnattu OC <gnattuoc@me.com>
 + *
@@ -1059,6 +1059,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    double                      peak;
 +    double                      target_peak;
 +    double                      param;
++    double                      final_param;
 +    double                      desat_param;
 +    double                      scene_threshold;
 +    int                         initialised;
@@ -1238,7 +1239,8 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +
 +static av_cold int tonemap_videotoolbox_pre_init(AVFilterContext *avctx)
 +{
-+    //TonemapVideoToolboxContext *ctx = avctx->priv;
++    TonemapVideoToolboxContext *ctx = avctx->priv;
++    ctx->final_param = NAN;
 +    return 0;
 +}
 +
@@ -1329,26 +1331,26 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    switch(ctx->tonemap) {
 +        case TONEMAP_GAMMA:
 +            if (isnan(ctx->param))
-+                ctx->param = 1.8f;
++                ctx->final_param = 1.8f;
 +            break;
 +        case TONEMAP_REINHARD:
 +            if (!isnan(ctx->param))
-+                ctx->param = (1.0f - ctx->param) / ctx->param;
++                ctx->final_param = (1.0f - ctx->param) / ctx->param;
 +            break;
 +        case TONEMAP_MOBIUS:
 +            if (isnan(ctx->param))
-+                ctx->param = 0.3f;
++                ctx->final_param = 0.3f;
 +            break;
 +        case TONEMAP_BT2390:
 +            if (isnan(ctx->param))
-+                ctx->param = 1.0f; // diff from the spec-defined 0.5f
++                ctx->final_param = 1.0f; // diff from the spec-defined 0.5f
 +            else
-+                ctx->param = FFMIN(FFMAX(ctx->param, 0.5f), 2.0f);
++                ctx->final_param = FFMIN(FFMAX(ctx->param, 0.5f), 2.0f);
 +            break;
 +    }
 +
-+    if (isnan(ctx->param))
-+        ctx->param = 1.0f;
++    if (isnan(ctx->final_param))
++        ctx->final_param = 1.0f;
 +
 +    if (ctx->peak)
 +        ctx->peak = FFMAX(ctx->peak / 10.0f, 1.1f);
@@ -1434,7 +1436,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +        goto fail;
 +    }
 +
-+    tone_param = (float)ctx->param;
++    tone_param = (float)ctx->final_param;
 +    desat_param = (float)ctx->desat_param;
 +    target_peak = (float)ctx->target_peak;
 +    scene_threshold = (float)ctx->scene_threshold;
