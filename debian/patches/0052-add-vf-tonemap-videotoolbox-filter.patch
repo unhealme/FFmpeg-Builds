@@ -1237,7 +1237,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    }
 +}
 +
-+static av_cold int tonemap_videotoolbox_pre_init(AVFilterContext *avctx)
++static av_cold int tonemap_videotoolbox_preinit(AVFilterContext *avctx)
 +{
 +    TonemapVideoToolboxContext *ctx = avctx->priv;
 +    ctx->final_param = NAN;
@@ -2119,7 +2119,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    .description    = NULL_IF_CONFIG_SMALL("Perform HDR to SDR conversion with Metal."),
 +    .priv_size      = sizeof(TonemapVideoToolboxContext),
 +    .priv_class     = &tonemap_videotoolbox_class,
-+    .init           = tonemap_videotoolbox_pre_init,
++    .preinit        = tonemap_videotoolbox_preinit,
 +    .uninit         = tonemap_videotoolbox_uninit,
 +    FILTER_INPUTS(tonemap_videotoolbox_inputs),
 +    FILTER_OUTPUTS(tonemap_videotoolbox_outputs),

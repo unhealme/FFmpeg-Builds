@@ -1813,7 +1813,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_cuda.c
-@@ -0,0 +1,1167 @@
+@@ -0,0 +1,1173 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -1933,10 +1933,15 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    const AVPixFmtDescriptor *in_desc, *out_desc;
 +} TonemapCUDAContext;
 +
-+static av_cold int init(AVFilterContext *ctx)
++static av_cold int preinit(AVFilterContext *ctx)
 +{
 +    TonemapCUDAContext *s = ctx->priv;
 +    s->final_param = NAN;
++}
++
++static av_cold int init(AVFilterContext *ctx)
++{
++    TonemapCUDAContext *s = ctx->priv;
 +
 +    if (!strcmp(s->format_str, "same")) {
 +        s->format = AV_PIX_FMT_NONE;
@@ -2497,7 +2502,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    CONSTANT(".f32 dither_size         = %.1f", (float)ff_fruit_dither_size);
 +    CONSTANT(".f32 dither_quantization = %.1f", (float)((1 << s->out_desc->comp[0].depth) - 1));
 +    CONSTANT(".f32 ref_white           = %.4f", REFERENCE_WHITE_ALT);
-+    CONSTANT(".f32 tone_param          = %.4f", s->param);
++    CONSTANT(".f32 tone_param          = %.4f", s->final_param);
 +    CONSTANT(".f32 desat_param         = %.4f", s->desat_param);
 +    CONSTANT(".f32 pq_max_lum_div_ref_white = %.13lf", (float)(ST2084_MAX_LUMINANCE / REFERENCE_WHITE_ALT));
 +    CONSTANT(".f32 ref_white_div_pq_max_lum = %.13lf", (float)(REFERENCE_WHITE_ALT / ST2084_MAX_LUMINANCE));
@@ -2968,6 +2973,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    .name           = "tonemap_cuda",
 +    .description    = NULL_IF_CONFIG_SMALL("GPU accelerated HDR to SDR tonemapping"),
 +
++    .preinit        = preinit,
 +    .init           = init,
 +    .uninit         = uninit,
 +

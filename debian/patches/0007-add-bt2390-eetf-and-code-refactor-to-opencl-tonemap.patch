@@ -2080,11 +2080,11 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +    ctx->initialised = 0;
 +}
 +
-+ static av_cold int tonemap_opencl_pre_init(AVFilterContext *avctx)
++ static av_cold int tonemap_opencl_preinit(AVFilterContext *avctx)
 + {
 +     TonemapOpenCLContext *ctx = avctx->priv;
 +     ctx->final_param = NAN;
-+     return ff_opencl_filter_init(avctx);
++     return 0;
 + }
 +
 +static int format_is_supported(enum AVPixelFormat fmt)
@@ -2481,12 +2481,11 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
      { NULL }
  };
  
-@@ -541,7 +1092,7 @@ const AVFilter ff_vf_tonemap_opencl = {
+@@ -541,6 +1092,7 @@ const AVFilter ff_vf_tonemap_opencl = {
      .description    = NULL_IF_CONFIG_SMALL("Perform HDR to SDR conversion with tonemapping."),
      .priv_size      = sizeof(TonemapOpenCLContext),
      .priv_class     = &tonemap_opencl_class,
--    .init           = &ff_opencl_filter_init,
-+    .init           = &tonemap_opencl_pre_init,
++    .preinit        = &tonemap_opencl_preinit,
+     .init           = &ff_opencl_filter_init,
      .uninit         = &tonemap_opencl_uninit,
      FILTER_INPUTS(tonemap_opencl_inputs),
-     FILTER_OUTPUTS(tonemap_opencl_outputs),
