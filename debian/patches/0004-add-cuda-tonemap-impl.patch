@@ -1813,7 +1813,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_cuda.c
-@@ -0,0 +1,1173 @@
+@@ -0,0 +1,1174 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -1937,6 +1937,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +{
 +    TonemapCUDAContext *s = ctx->priv;
 +    s->final_param = NAN;
++    return 0;
 +}
 +
 +static av_cold int init(AVFilterContext *ctx)
