@@ -1086,7 +1086,7 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/cuda/tonemap.cu
-@@ -0,0 +1,579 @@
+@@ -0,0 +1,583 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -1210,7 +1210,8 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 +
 +static __inline__ __device__
 +float bt2390(float s, float peak, float dst_peak) {
-+    float s_pq = inverse_eotf_st2084(s);
++    float s_clipped = min(s, peak);
++    float s_pq = inverse_eotf_st2084(s_clipped);
 +    return eotf_st2084(bt2390_common(s_pq, peak, dst_peak));
 +}
 +
@@ -1324,8 +1325,11 @@ Index: FFmpeg/libavfilter/cuda/tonemap.cu
 +
 +static __inline__ __device__
 +float3 map_one_pixel_itp_mode(float3 rgb, const FFCUDAFrame& src, const FFCUDAFrame& dst) {
-+    float3 ictcp = lrgb2ictcp(rgb.x, rgb.y, rgb.z);
 +    float peak = src.peak;
++    float r = mix(rgb.x, min(rgb.x, peak), tonemap_func == TONEMAP_BT2390);
++    float g = mix(rgb.y, min(rgb.y, peak), tonemap_func == TONEMAP_BT2390);
++    float b = mix(rgb.z, min(rgb.z, peak), tonemap_func == TONEMAP_BT2390);
++    float3 ictcp = lrgb2ictcp(r, g, b);
 +    float dst_peak = 1.0f;
 +    ictcp.x = max(ictcp.x, FLOAT_EPS);
 +    float i_o = ictcp.x;
@@ -1809,7 +1813,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_cuda.c
-@@ -0,0 +1,1165 @@
+@@ -0,0 +1,1174 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -1920,6 +1924,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    int tradeoff;
 +    int init_with_dovi;
 +    double param;
++    double final_param;
 +    double desat_param;
 +    double peak;
 +    double dst_peak;
@@ -1927,6 +1932,13 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +
 +    const AVPixFmtDescriptor *in_desc, *out_desc;
 +} TonemapCUDAContext;
++
++static av_cold int preinit(AVFilterContext *ctx)
++{
++    TonemapCUDAContext *s = ctx->priv;
++    s->final_param = NAN;
++    return 0;
++}
 +
 +static av_cold int init(AVFilterContext *ctx)
 +{
@@ -2343,26 +2355,26 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    switch(s->tonemap) {
 +    case TONEMAP_GAMMA:
 +        if (isnan(s->param))
-+            s->param = 1.8f;
++            s->final_param = 1.8f;
 +        break;
 +    case TONEMAP_REINHARD:
 +        if (!isnan(s->param))
-+            s->param = (1.0f - s->param) / s->param;
++            s->final_param = (1.0f - s->param) / s->param;
 +        break;
 +    case TONEMAP_MOBIUS:
 +        if (isnan(s->param))
-+            s->param = 0.3f;
++            s->final_param = 0.3f;
 +        break;
 +    case TONEMAP_BT2390:
 +        if (isnan(s->param))
-+            s->param = 1.0f; // diff from the spec-defined 0.5f
++            s->final_param = 1.0f; // diff from the spec-defined 0.5f
 +        else
-+            s->param = FFMIN(FFMAX(s->param, 0.5f), 2.0f);
++            s->final_param = FFMIN(FFMAX(s->param, 0.5f), 2.0f);
 +        break;
 +    }
 +
-+    if (isnan(s->param))
-+        s->param = 1.0f;
++    if (isnan(s->final_param))
++        s->final_param = 1.0f;
 +
 +    if (s->peak)
 +        s->peak = FFMAX(s->peak / 10.0f, 1.1f);
@@ -2491,7 +2503,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    CONSTANT(".f32 dither_size         = %.1f", (float)ff_fruit_dither_size);
 +    CONSTANT(".f32 dither_quantization = %.1f", (float)((1 << s->out_desc->comp[0].depth) - 1));
 +    CONSTANT(".f32 ref_white           = %.4f", REFERENCE_WHITE_ALT);
-+    CONSTANT(".f32 tone_param          = %.4f", s->param);
++    CONSTANT(".f32 tone_param          = %.4f", s->final_param);
 +    CONSTANT(".f32 desat_param         = %.4f", s->desat_param);
 +    CONSTANT(".f32 pq_max_lum_div_ref_white = %.13lf", (float)(ST2084_MAX_LUMINANCE / REFERENCE_WHITE_ALT));
 +    CONSTANT(".f32 ref_white_div_pq_max_lum = %.13lf", (float)(REFERENCE_WHITE_ALT / ST2084_MAX_LUMINANCE));
@@ -2962,6 +2974,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +    .name           = "tonemap_cuda",
 +    .description    = NULL_IF_CONFIG_SMALL("GPU accelerated HDR to SDR tonemapping"),
 +
++    .preinit        = preinit,
 +    .init           = init,
 +    .uninit         = uninit,
 +
