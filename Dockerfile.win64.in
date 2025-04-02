@@ -20,7 +20,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CFLAGS="-static-libgcc -static-libstdc++ -I/opt/ffdeps/include -mtune=generic -O2 -pipe -D_FORTIFY_SOURCE=0 -D_WIN32_WINNT=0x0601" \
     CXXFLAGS="-static-libgcc -static-libstdc++ -I/opt/ffdeps/include -mtune=generic -O2 -pipe -D_FORTIFY_SOURCE=0 -D_WIN32_WINNT=0x0601" \
     LDFLAGS="-static-libgcc -static-libstdc++ -L/opt/ffdeps/lib -O2 -pipe" \
-    DLLTOOL="x86_64-w64-mingw32-dlltool"
+    DLLTOOL="x86_64-w64-mingw32-dlltool" \
+    CMAKE_POLICY_VERSION_MINIMUM="3.5"
 
 # Prepare Debian and mingw-w64 build environment
 RUN apt-get update \

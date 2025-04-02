@@ -44,4 +44,5 @@ ENV PATH="/opt/ct-ng/bin:${PATH}" \
     CXXFLAGS="-static-libgcc -static-libstdc++ -I/opt/ffbuild/include -O2 -pipe -D_FORTIFY_SOURCE=2 -fstack-protector-strong" \
     LDFLAGS="-static-libgcc -static-libstdc++ -L/opt/ffbuild/lib -O2 -pipe -fstack-protector-strong" \
     STAGE_CFLAGS="-fno-semantic-interposition" \
-    STAGE_CXXFLAGS="-fno-semantic-interposition"
+    STAGE_CXXFLAGS="-fno-semantic-interposition" \
+    CMAKE_POLICY_VERSION_MINIMUM="3.5"

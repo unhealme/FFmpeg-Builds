@@ -10,4 +10,5 @@ ffbuild_macbase() {
   cp "$BUILDER_ROOT"/images/base/check-wget.sh /opt/ffbuild/bin/check-wget
   chmod +x /opt/ffbuild/bin/check-wget
   export PATH="/opt/ffbuild/bin:$PATH"
+  export CMAKE_POLICY_VERSION_MINIMUM="3.5"
 }

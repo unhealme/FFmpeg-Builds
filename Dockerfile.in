@@ -22,6 +22,7 @@ ENV LDFLAGS="-Wl,-rpath=${TARGET_DIR}/lib -L${TARGET_DIR}/lib"
 ENV CXXFLAGS="-I${TARGET_DIR}/include $CXXFLAGS"
 ENV CPPFLAGS="-I${TARGET_DIR}/include $CPPFLAGS"
 ENV CFLAGS="-I${TARGET_DIR}/include $CFLAGS"
+ENV CMAKE_POLICY_VERSION_MINIMUM="3.5"
 
 # Prepare Debian build environment
 RUN apt-get update \

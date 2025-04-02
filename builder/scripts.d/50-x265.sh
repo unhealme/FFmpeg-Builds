@@ -13,6 +13,17 @@ ffbuild_dockerbuild() {
     cd x265
     git checkout "$SCRIPT_COMMIT"
 
+    # Unbreak build compat with CMake 4.0+
+    if [[ $TARGET == mac* ]]; then
+        gsed -i 's/CMP0025 OLD/CMP0025 NEW/g' source/CMakeLists.txt
+        gsed -i 's/CMP0054 OLD/CMP0054 NEW/g' source/CMakeLists.txt
+        gsed -i 's/STREQUAL \"Clang\"/MATCHES \"Clang\"/g' source/CMakeLists.txt
+    else
+        sed -i 's/CMP0025 OLD/CMP0025 NEW/g' source/CMakeLists.txt
+        sed -i 's/CMP0054 OLD/CMP0054 NEW/g' source/CMakeLists.txt
+        sed -i 's/STREQUAL \"Clang\"/MATCHES \"Clang\"/g' source/CMakeLists.txt
+    fi
+
     # Fix naming conflicts: https://bitbucket.org/multicoreware/x265_git/issues/984/illegal-instruction-neon_dotprod-crashes
     if [[ $TARGET == mac* ]]; then
         gsed -i 's/interp8_horiz_pp_dotprod/interp8_horiz_pp_dotprod_i8mm/g' source/common/aarch64/filter-neon-i8mm.cpp
