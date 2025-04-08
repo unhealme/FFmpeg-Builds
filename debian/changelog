@@ -1,3 +1,13 @@
+jellyfin-ffmpeg (7.1.1-1) unstable; urgency=medium
+
+  * New upstream version 7.1.1
+  * Update Mesa branch to 25.0
+  * Enable CUDA support for Linux/Arm64
+  * avfilter/tonemap_opencl: implement tradeoff mode as 3dlut
+  * Fix value range and lost params for GPU tonemap filters
+
+ -- nyanmisaka <nst799610810@gmail.com>  Thu, 6 Mar 2025 15:17:41 +0800
+
 jellyfin-ffmpeg (7.0.2-9) unstable; urgency=medium
 
   * avfilter/tonemapx: add dovi to hdr10 support
