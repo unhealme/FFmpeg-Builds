@@ -2,7 +2,7 @@ Index: FFmpeg/libavfilter/vf_overlay_vaapi.c
 ===================================================================
 --- FFmpeg.orig/libavfilter/vf_overlay_vaapi.c
 +++ FFmpeg/libavfilter/vf_overlay_vaapi.c
-@@ -311,8 +311,12 @@ static int overlay_vaapi_config_input_ov
+@@ -312,8 +312,12 @@ static int overlay_vaapi_config_input_ov
          ctx->blend_alpha  = ctx->alpha;
      }
  

@@ -453,12 +453,12 @@ Index: FFmpeg/libavfilter/vf_overlay_opencl.c
 -            (AVHWFramesContext*)input_overlay->hw_frames_ctx->data;
 +    if (!input_main)
 +        return AVERROR_BUG;
-+
-+    if (!input_overlay)
-+        passthrough = 1;
  
 -        err = overlay_opencl_load(avctx, main_fc->sw_format,
 -                                  overlay_fc->sw_format);
++    if (!input_overlay)
++        passthrough = 1;
++
 +    if (!ctx->initialised) {
 +        err = overlay_opencl_load(avctx);
          if (err < 0)
@@ -532,16 +532,18 @@ Index: FFmpeg/libavfilter/vf_overlay_opencl.c
      av_frame_free(&output);
      return err;
  }
-@@ -224,8 +330,49 @@ static int overlay_opencl_config_output(
+@@ -224,8 +330,51 @@ static int overlay_opencl_config_output(
  {
      AVFilterContext *avctx = outlink->src;
      OverlayOpenCLContext *ctx = avctx->priv;
 +
 +    AVFilterLink *inlink = avctx->inputs[0];
-+    AVHWFramesContext *frames_ctx_main = (AVHWFramesContext*)inlink->hw_frames_ctx->data;
++    FilterLink      *inl = ff_filter_link(inlink);
++    AVHWFramesContext *frames_ctx_main = (AVHWFramesContext*)inl->hw_frames_ctx->data;
 +
 +    AVFilterLink *inlink_overlay = avctx->inputs[1];
-+    AVHWFramesContext *frames_ctx_overlay = (AVHWFramesContext*)inlink_overlay->hw_frames_ctx->data;
++    FilterLink      *inl_overlay = ff_filter_link(inlink_overlay);
++    AVHWFramesContext *frames_ctx_overlay = (AVHWFramesContext*)inl_overlay->hw_frames_ctx->data;
 +
      int err;
  
@@ -582,7 +584,7 @@ Index: FFmpeg/libavfilter/vf_overlay_opencl.c
      err = ff_opencl_filter_config_output(outlink);
      if (err < 0)
          return err;
-@@ -234,6 +381,11 @@ static int overlay_opencl_config_output(
+@@ -234,6 +383,11 @@ static int overlay_opencl_config_output(
      if (err < 0)
          return err;
  
@@ -594,7 +596,7 @@ Index: FFmpeg/libavfilter/vf_overlay_opencl.c
      return ff_framesync_configure(&ctx->fs);
  }
  
-@@ -265,6 +417,20 @@ static av_cold void overlay_opencl_unini
+@@ -265,6 +419,20 @@ static av_cold void overlay_opencl_unini
                     "kernel: %d.\n", cle);
      }
  
@@ -615,7 +617,7 @@ Index: FFmpeg/libavfilter/vf_overlay_opencl.c
      if (ctx->command_queue) {
          cle = clReleaseCommandQueue(ctx->command_queue);
          if (cle != CL_SUCCESS)
-@@ -279,11 +445,20 @@ static av_cold void overlay_opencl_unini
+@@ -279,11 +447,20 @@ static av_cold void overlay_opencl_unini
  
  #define OFFSET(x) offsetof(OverlayOpenCLContext, x)
  #define FLAGS (AV_OPT_FLAG_FILTERING_PARAM | AV_OPT_FLAG_VIDEO_PARAM)

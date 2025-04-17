@@ -2,7 +2,7 @@ Index: FFmpeg/configure
 ===================================================================
 --- FFmpeg.orig/configure
 +++ FFmpeg/configure
-@@ -3889,6 +3889,7 @@ rubberband_filter_deps="librubberband"
+@@ -3935,6 +3935,7 @@ rubberband_filter_deps="librubberband"
  sab_filter_deps="gpl swscale"
  scale2ref_filter_deps="swscale"
  scale_filter_deps="swscale"
@@ -14,7 +14,7 @@ Index: FFmpeg/libavfilter/Makefile
 ===================================================================
 --- FFmpeg.orig/libavfilter/Makefile
 +++ FFmpeg/libavfilter/Makefile
-@@ -459,6 +459,7 @@ OBJS-$(CONFIG_SCALE_FILTER)
+@@ -461,6 +461,7 @@ OBJS-$(CONFIG_SCALE_FILTER)
  OBJS-$(CONFIG_SCALE_CUDA_FILTER)             += vf_scale_cuda.o scale_eval.o \
                                                  vf_scale_cuda.ptx.o cuda/load_helper.o
  OBJS-$(CONFIG_SCALE_NPP_FILTER)              += vf_scale_npp.o scale_eval.o
@@ -26,7 +26,7 @@ Index: FFmpeg/libavfilter/allfilters.c
 ===================================================================
 --- FFmpeg.orig/libavfilter/allfilters.c
 +++ FFmpeg/libavfilter/allfilters.c
-@@ -432,6 +432,7 @@ extern const AVFilter ff_vf_sab;
+@@ -433,6 +433,7 @@ extern const AVFilter ff_vf_sab;
  extern const AVFilter ff_vf_scale;
  extern const AVFilter ff_vf_scale_cuda;
  extern const AVFilter ff_vf_scale_npp;
@@ -331,7 +331,7 @@ Index: FFmpeg/libavfilter/vf_scale_opencl.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_scale_opencl.c
-@@ -0,0 +1,777 @@
+@@ -0,0 +1,779 @@
 +/*
 + * Copyright (c) 2018 Gabriel Machado
 + * Copyright (c) 2021 NyanMisaka
@@ -354,13 +354,13 @@ Index: FFmpeg/libavfilter/vf_scale_opencl.c
 + */
 +
 +#include "libavutil/avassert.h"
-+#include "libavutil/common.h"
 +#include "libavutil/imgutils.h"
++#include "libavutil/mem.h"
 +#include "libavutil/opt.h"
 +#include "libavutil/pixdesc.h"
 +
 +#include "avfilter.h"
-+#include "internal.h"
++#include "filters.h"
 +#include "opencl.h"
 +#include "opencl_source.h"
 +#include "scale_eval.h"
@@ -762,8 +762,10 @@ Index: FFmpeg/libavfilter/vf_scale_opencl.c
 +
 +static int scale_opencl_config_output(AVFilterLink *outlink)
 +{
++    FilterLink        *outl = ff_filter_link(outlink);
 +    AVFilterContext  *avctx = outlink->src;
 +    AVFilterLink    *inlink = avctx->inputs[0];
++    FilterLink         *inl = ff_filter_link(inlink);
 +    ScaleOpenCLContext *ctx = avctx->priv;
 +    AVHWFramesContext *in_frames_ctx;
 +    enum AVPixelFormat in_format;
@@ -772,9 +774,9 @@ Index: FFmpeg/libavfilter/vf_scale_opencl.c
 +    const AVPixFmtDescriptor *out_desc;
 +    int ret;
 +
-+    if (!inlink->hw_frames_ctx)
++    if (!inl->hw_frames_ctx)
 +        return AVERROR(EINVAL);
-+    in_frames_ctx = (AVHWFramesContext*)inlink->hw_frames_ctx->data;
++    in_frames_ctx = (AVHWFramesContext*)inl->hw_frames_ctx->data;
 +    in_format     = in_frames_ctx->sw_format;
 +    out_format    = (ctx->format == AV_PIX_FMT_NONE) ? in_format : ctx->format;
 +    in_desc       = av_pix_fmt_desc_get(in_format);
@@ -818,9 +820,9 @@ Index: FFmpeg/libavfilter/vf_scale_opencl.c
 +    ctx->ocf.output_height = ctx->dst_h;
 +
 +    if (ctx->passthrough && ctx->src_w == ctx->dst_w && ctx->src_h == ctx->dst_h && ctx->in_fmt == ctx->out_fmt) {
-+        av_buffer_unref(&outlink->hw_frames_ctx);
-+        outlink->hw_frames_ctx = av_buffer_ref(inlink->hw_frames_ctx);
-+        if (!outlink->hw_frames_ctx)
++        av_buffer_unref(&outl->hw_frames_ctx);
++        outl->hw_frames_ctx = av_buffer_ref(inl->hw_frames_ctx);
++        if (!outl->hw_frames_ctx)
 +            return AVERROR(ENOMEM);
 +        return 0;
 +    } else {
