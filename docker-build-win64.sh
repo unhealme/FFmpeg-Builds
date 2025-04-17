@@ -6,7 +6,7 @@ set -o errexit
 set -o xtrace
 
 # Update mingw-w64 headers
-mingw_commit="be91da60c4ae62a76099279500810c8ffbef4da1"
+mingw_commit="b025331084febc41e108698bf3ac6c39c6ccfba2"
 git clone https://git.code.sf.net/p/mingw-w64/mingw-w64.git
 pushd mingw-w64/mingw-w64-headers
 git checkout ${mingw_commit}
@@ -47,10 +47,8 @@ popd
 popd
 
 # LIBXML2
-git clone -b v2.13.5 --depth=1 https://github.com/GNOME/libxml2.git
+git clone -b v2.13.6 --depth=1 https://github.com/GNOME/libxml2.git
 pushd libxml2
-# Fallback to internal entropy when system native method failed
-git apply ${SOURCE_DIR}/builder/patches/libxml2/v2.13.5/0001-dict-Fallback-to-internal-entropy.patch
 ./autogen.sh \
     --prefix=${FF_DEPS_PREFIX} \
     --host=${FF_TOOLCHAIN} \
@@ -72,7 +70,7 @@ make install
 popd
 
 # FREETYPE
-git clone --depth=1 https://gitlab.freedesktop.org/freetype/freetype.git
+git clone --depth=1 https://github.com/freetype/freetype.git
 pushd freetype
 ./autogen.sh
 ./configure \
@@ -158,7 +156,7 @@ popd
 popd
 
 # LZMA
-git clone -b v5.6.3 --depth=1 https://github.com/tukaani-project/xz.git
+git clone -b v5.6.4 --depth=1 https://github.com/tukaani-project/xz.git
 pushd xz
 ./autogen.sh --no-po4a --no-doxygen
 ./configure \
@@ -167,6 +165,7 @@ pushd xz
     --disable-symbol-versions \
     --disable-shared \
     --enable-static \
+    --disable-nls \
     --with-pic
 make -j$(nproc)
 make install
@@ -191,7 +190,7 @@ popd
 popd
 
 # HARFBUZZ
-git clone -b 10.2.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
+git clone -b 10.4.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
 meson setup harfbuzz harfbuzz_build \
     --prefix=${FF_DEPS_PREFIX} \
     --cross-file=${FF_MESON_TOOLCHAIN} \
@@ -459,7 +458,7 @@ popd
 popd
 
 # SVT-AV1
-git clone -b v2.3.0 --depth=1 https://gitlab.com/AOMediaCodec/SVT-AV1.git
+git clone -b v3.0.2 --depth=1 https://gitlab.com/AOMediaCodec/SVT-AV1.git
 pushd SVT-AV1
 mkdir build
 pushd build
@@ -548,7 +547,7 @@ popd
 # AMF
 mkdir amf-headers
 pushd amf-headers
-amf_ver="1.4.36"
+amf_ver="1.4.36.0"
 amf_link="https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v${amf_ver}/AMF-headers-v${amf_ver}.tar.gz"
 wget ${amf_link} -O amf.tar.gz
 tar xaf amf.tar.gz
@@ -591,7 +590,6 @@ fi
     --disable-debug \
     --disable-doc \
     --disable-sdl2 \
-    --disable-ptx-compression \
     --disable-w32threads \
     --enable-pthreads \
     --enable-shared \

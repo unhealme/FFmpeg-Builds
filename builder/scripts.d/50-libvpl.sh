@@ -28,10 +28,11 @@ ffbuild_dockerbuild() {
 }
 
 ffbuild_configure() {
-    [[ $TARGET != *arm64 ]] && echo --enable-libvpl
+    echo --enable-libvpl
 }
 
 ffbuild_unconfigure() {
-    return 0
-    [[ $TARGET != *arm64 ]] && echo --disable-libvpl
+    [[ $TARGET == mac* ]] && return 0
+    [[ $TARGET == *arm64 ]] && return 0
+    echo --disable-libvpl
 }

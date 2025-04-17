@@ -13,6 +13,15 @@ ffbuild_dockerbuild() {
     cd x265
     git checkout "$SCRIPT_COMMIT"
 
+    # Fix naming conflicts: https://bitbucket.org/multicoreware/x265_git/issues/984/illegal-instruction-neon_dotprod-crashes
+    if [[ $TARGET == mac* ]]; then
+        gsed -i 's/interp8_horiz_pp_dotprod/interp8_horiz_pp_dotprod_i8mm/g' source/common/aarch64/filter-neon-i8mm.cpp
+        gsed -i 's/interp8_horiz_ps_dotprod/interp8_horiz_ps_dotprod_i8mm/g' source/common/aarch64/filter-neon-i8mm.cpp
+    else
+        sed -i 's/interp8_horiz_pp_dotprod/interp8_horiz_pp_dotprod_i8mm/g' source/common/aarch64/filter-neon-i8mm.cpp
+        sed -i 's/interp8_horiz_ps_dotprod/interp8_horiz_ps_dotprod_i8mm/g' source/common/aarch64/filter-neon-i8mm.cpp
+    fi
+
     local common_config=(
         -DCMAKE_INSTALL_PREFIX="$FFBUILD_PREFIX"
         -DCMAKE_BUILD_TYPE=Release
@@ -25,17 +34,6 @@ ffbuild_dockerbuild() {
     if [[ $TARGET != mac* ]]; then
         common_config+=(
             -DCMAKE_TOOLCHAIN_FILE="$FFBUILD_CMAKE_TOOLCHAIN"
-        )
-    fi
-
-    # Wa for https://bitbucket.org/multicoreware/x265_git/issues/984/illegal-instruction-neon_dotprod-crashes
-    if [[ $TARGET == linuxarm64 ]]; then
-        common_config+=(
-            -DENABLE_NEON=ON
-            -DENABLE_NEON_DOTPROD=OFF
-            -DENABLE_NEON_I8MM=OFF
-            -DENABLE_SVE=OFF
-            -DENABLE_SVE2=OFF
         )
     fi
 

@@ -16,11 +16,12 @@ ffbuild_dockerbuild() {
 }
 
 ffbuild_configure() {
-    [[ $TARGET != *arm64 ]] && echo --enable-ffnvcodec --enable-cuda --enable-cuda-llvm --enable-cuvid --enable-nvdec --enable-nvenc
+    echo --enable-ffnvcodec --enable-cuda --enable-cuda-llvm --enable-cuvid --enable-nvdec --enable-nvenc
 }
 
 ffbuild_unconfigure() {
-    [[ $TARGET != *arm64 ]] && echo --disable-ffnvcodec --disable-cuda --disable-cuda-llvm --disable-cuvid --disable-nvdec --disable-nvenc
+    [[ $TARGET == mac* ]] && return 0
+    echo --disable-ffnvcodec --disable-cuda --disable-cuda-llvm --disable-cuvid --disable-nvdec --disable-nvenc
 }
 
 ffbuild_cflags() {

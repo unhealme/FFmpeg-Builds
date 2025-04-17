@@ -1,14 +1,10 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/GNOME/libxml2.git"
-SCRIPT_COMMIT="1c82bca6bd23d0f0858d7fc228ec3a91fda3e0e2"
+SCRIPT_COMMIT="66453240c94b5cbd3e9ae9b32016fdafb13cdf18"
 
 ffbuild_enabled() {
     return 0
-}
-
-ffbuild_dockerstage() {
-    to_df "RUN --mount=src=${SELF},dst=/stage.sh --mount=src=patches/libxml2/master,dst=/patches run_stage /stage.sh"
 }
 
 ffbuild_dockerbuild() {
@@ -17,11 +13,6 @@ ffbuild_dockerbuild() {
 
     git-mini-clone "$SCRIPT_REPO" "$SCRIPT_COMMIT" libxml2
     cd libxml2
-
-    for patch in /patches/*.patch; do
-        echo "Applying $patch"
-        patch -p1 < "$patch"
-    done
 
     local myconf=(
         --prefix="$FFBUILD_PREFIX"
