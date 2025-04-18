@@ -24,8 +24,12 @@ msys2_references=(
   "cpe: cpe:/a:multicorewareinc:x265_high_efficiency_video_coding"
 )
 _commit="fa2770934b8f3d88aa866c77f27cb63f69a9ed39"
-source=("${_realname}"::"git+https://bitbucket.org/multicoreware/x265_git.git#commit=${_commit}")
-sha256sums=('SKIP')
+source=("${_realname}"::"git+https://bitbucket.org/multicoreware/x265_git.git#commit=${_commit}"
+        "0001-Fix-CMake-build-error-with-latest-CMake-4.0-release.patch"
+        "0002-Fix-string-matching-for-AppleClang.patch")
+sha256sums=('SKIP'
+            'f6b34accac23abb27ce9f0cf6c5381a86997686635bfa40df08ba916743bdc38'
+            '984be6dad5780b117c66bfe9e80299e6ef879c7f83120354d701520afe671364')
 
 export MINGW_TOOLCHAIN_PREFIX="${MINGW_PREFIX}"
 export FF_MINGW_PREFIX="${MINGW_TOOLCHAIN_PREFIX}/ffbuild"
@@ -33,6 +37,9 @@ export FF_MINGW_PREFIX="${MINGW_TOOLCHAIN_PREFIX}/ffbuild"
 prepare() {
   mv "${srcdir}"/"x265"* "${srcdir}"/x265_${pkgver}
   cd "${srcdir}"/x265_${pkgver}
+
+  patch -Np1 -i "${srcdir}/0001-Fix-CMake-build-error-with-latest-CMake-4.0-release.patch"
+  patch -Np1 -i "${srcdir}/0002-Fix-string-matching-for-AppleClang.patch"
 
   for d in 8 10 12; do
     if [[ -d ${srcdir}/build-${CARCH}-${d} ]]; then

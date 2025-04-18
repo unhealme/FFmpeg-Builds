@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/GPUOpen-LibrariesAndSDKs/AMF.git"
-SCRIPT_COMMIT="681af0dcfc8b88d8c6634f259e2f9e60a54f5a42"
+SCRIPT_COMMIT="16f7d73e0b45c473e903e46981ed0b91efc4c091"
 
 ffbuild_enabled() {
     [[ $TARGET == mac* ]] && return -1
@@ -18,9 +18,11 @@ ffbuild_dockerbuild() {
 }
 
 ffbuild_configure() {
-    [[ $TARGET != *arm64 ]] && echo --enable-amf
+    echo --enable-amf
 }
 
 ffbuild_unconfigure() {
-    [[ $TARGET != *arm64 ]] && echo --disable-amf
+    [[ $TARGET == mac* ]] && return 0
+    [[ $TARGET == *arm64 ]] && return 0
+    echo --disable-amf
 }

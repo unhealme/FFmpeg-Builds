@@ -292,7 +292,7 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
  
  #include "avfilter.h"
 +#include "dither_matrix.h"
- #include "internal.h"
+ #include "filters.h"
  #include "scale_eval.h"
  #include "video.h"
 @@ -108,6 +110,9 @@ typedef struct CUDAScaleContext {
@@ -300,8 +300,8 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
  
      float param;
 +
-+    CUdeviceptr ditherBuffer;
-+    CUtexObject ditherTex;
++    CUdeviceptr dither_buffer;
++    CUtexObject dither_tex;
  } CUDAScaleContext;
  
  static av_cold int cudascale_init(AVFilterContext *ctx)
@@ -317,13 +317,13 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
          CHECK_CU(cu->cuCtxPushCurrent(s->hwctx->cuda_ctx));
 -        CHECK_CU(cu->cuModuleUnload(s->cu_module));
 -        s->cu_module = NULL;
-+        if (s->ditherTex) {
-+            CHECK_CU(cu->cuTexObjectDestroy(s->ditherTex));
-+            s->ditherTex = 0;
++        if (s->dither_tex) {
++            CHECK_CU(cu->cuTexObjectDestroy(s->dither_tex));
++            s->dither_tex = 0;
 +        }
-+        if (s->ditherBuffer) {
-+            CHECK_CU(cu->cuMemFree(s->ditherBuffer));
-+            s->ditherBuffer = 0;
++        if (s->dither_buffer) {
++            CHECK_CU(cu->cuMemFree(s->dither_buffer));
++            s->dither_buffer = 0;
 +        }
 +        if (s->cu_module) {
 +            CHECK_CU(cu->cuModuleUnload(s->cu_module));
@@ -332,7 +332,7 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
          CHECK_CU(cu->cuCtxPopCurrent(&dummy));
      }
  
-@@ -273,6 +288,67 @@ static av_cold int init_processing_chain
+@@ -275,6 +290,68 @@ static av_cold int init_processing_chain
      return 0;
  }
  
@@ -340,7 +340,8 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
 +{
 +    CUDAScaleContext    *s  = ctx->priv;
 +    AVFilterLink        *inlink = ctx->inputs[0];
-+    AVHWFramesContext   *frames_ctx = (AVHWFramesContext*)inlink->hw_frames_ctx->data;
++    FilterLink          *inl = ff_filter_link(inlink);
++    AVHWFramesContext   *frames_ctx = (AVHWFramesContext*)inl->hw_frames_ctx->data;
 +    AVCUDADeviceContext *device_hwctx = frames_ctx->device_ctx->hwctx;
 +    CudaFunctions       *cu = device_hwctx->internal->cuda_dl;
 +    CUcontext dummy, cuda_ctx = device_hwctx->cuda_ctx;
@@ -381,15 +382,15 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
 +    if ((ret = CHECK_CU(cu->cuCtxPushCurrent(cuda_ctx))) < 0)
 +        return ret;
 +
-+    if ((ret = CHECK_CU(cu->cuMemAlloc(&s->ditherBuffer, sizeof(ff_fruit_dither_matrix)))) < 0)
++    if ((ret = CHECK_CU(cu->cuMemAlloc(&s->dither_buffer, sizeof(ff_fruit_dither_matrix)))) < 0)
 +        goto fail;
 +
-+    res_desc.res.pitch2D.devPtr = cpy.dstDevice = s->ditherBuffer;
++    res_desc.res.pitch2D.devPtr = cpy.dstDevice = s->dither_buffer;
 +
 +    if ((ret = CHECK_CU(cu->cuMemcpy2D(&cpy))) < 0)
 +        goto fail;
 +
-+    if ((ret = CHECK_CU(cu->cuTexObjectCreate(&s->ditherTex, &res_desc, &tex_desc, NULL))) < 0)
++    if ((ret = CHECK_CU(cu->cuTexObjectCreate(&s->dither_tex, &res_desc, &tex_desc, NULL))) < 0)
 +        goto fail;
 +
 +fail:
@@ -400,9 +401,9 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
  static av_cold int cudascale_load_functions(AVFilterContext *ctx)
  {
      CUDAScaleContext *s = ctx->priv;
-@@ -377,6 +453,11 @@ static av_cold int cudascale_config_prop
-     if (ret < 0)
-         return ret;
+@@ -383,6 +460,11 @@ static av_cold int cudascale_config_prop
+     s->hwctx = device_hwctx;
+     s->cu_stream = s->hwctx->stream;
  
 +    if (s->in_desc->comp[0].depth > s->out_desc->comp[0].depth) {
 +        if ((ret = cudascale_setup_dither(ctx)) < 0)
@@ -412,7 +413,7 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
      if (inlink->sample_aspect_ratio.num) {
          outlink->sample_aspect_ratio = av_mul_q((AVRational){outlink->h*inlink->w,
                                                               outlink->w*inlink->h},
-@@ -412,11 +493,15 @@ static int call_resize_kernel(AVFilterCo
+@@ -418,11 +500,15 @@ static int call_resize_kernel(AVFilterCo
          (CUdeviceptr)out_frame->data[2], (CUdeviceptr)out_frame->data[3]
      };
  
@@ -425,11 +426,11 @@ Index: FFmpeg/libavfilter/vf_scale_cuda.c
          &dst_width, &dst_height, &dst_pitch,
 -        &src_width, &src_height, &s->param
 +        &src_width, &src_height, &s->param,
-+        &s->ditherTex, &dither_size, &dither_quantization
++        &s->dither_tex, &dither_size, &dither_quantization
      };
  
      return CHECK_CU(cu->cuLaunchKernel(func,
-@@ -440,6 +525,7 @@ static int scalecuda_resize(AVFilterCont
+@@ -446,6 +532,7 @@ static int scalecuda_resize(AVFilterCont
  
      for (i = 0; i < s->in_planes; i++) {
          CUDA_TEXTURE_DESC tex_desc = {

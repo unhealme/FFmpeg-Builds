@@ -60,4 +60,5 @@ ENV PATH="/opt/ct-ng/bin:${PATH}" \
     CXXFLAGS="-static-libgcc -static-libstdc++ -I/opt/ffbuild/include -O2 -pipe -march=armv8-a -fPIC -DPIC -D_FORTIFY_SOURCE=2 -fstack-protector-strong -pthread" \
     LDFLAGS="-static-libgcc -static-libstdc++ -L/opt/ffbuild/lib -O2 -pipe -march=armv8-a -fstack-protector-strong -Wl,-z,relro,-z,now -pthread -lm" \
     STAGE_CFLAGS="-fvisibility=hidden -fno-semantic-interposition" \
-    STAGE_CXXFLAGS="-fvisibility=hidden -fno-semantic-interposition"
+    STAGE_CXXFLAGS="-fvisibility=hidden -fno-semantic-interposition" \
+    CMAKE_POLICY_VERSION_MINIMUM="3.5"

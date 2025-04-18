@@ -1,8 +1,8 @@
 #!/bin/bash
 
 SCRIPT_REPO="https://github.com/openssl/openssl.git"
-SCRIPT_COMMIT="openssl-3.1.7"
-SCRIPT_TAGFILTER="openssl-3.1.*"
+SCRIPT_COMMIT="openssl-3.4.1"
+SCRIPT_TAGFILTER="openssl-3.4.*"
 
 ffbuild_enabled() {
     return 0
@@ -20,7 +20,6 @@ ffbuild_dockerbuild() {
         no-tests
         no-apps
         no-legacy
-        no-ssl2
         no-ssl3
         enable-camellia
         enable-ec

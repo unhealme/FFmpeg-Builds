@@ -67,17 +67,13 @@ prepare_extra_common() {
 
     # LIBXML2
     pushd ${SOURCE_DIR}
-    libxml2_ver="v2.13.5"
+    libxml2_ver="v2.13.6"
     if [[ $( lsb_release -c -s ) == "focal" ]]; then
         # newer versions require automake 1.16.3+
         libxml2_ver="v2.9.14"
     fi
     git clone -b ${libxml2_ver} --depth=1 https://github.com/GNOME/libxml2.git
     pushd libxml2
-    if [[ $(lsb_release -c -s) != "focal" ]]; then
-        # Fallback to internal entropy when system native method failed
-        git apply ${SOURCE_DIR}/builder/patches/libxml2/v2.13.5/0001-dict-Fallback-to-internal-entropy.patch
-    fi
     ./autogen.sh \
         ${CROSS_OPT} \
         --prefix=${TARGET_DIR} \
@@ -91,7 +87,7 @@ prepare_extra_common() {
 
     # FREETYPE
     pushd ${SOURCE_DIR}
-    git clone -b VER-2-13-3 --depth=1 https://gitlab.freedesktop.org/freetype/freetype.git
+    git clone -b VER-2-13-3 --depth=1 https://github.com/freetype/freetype.git
     pushd freetype
     ./autogen.sh
     ./configure \
@@ -144,7 +140,7 @@ prepare_extra_common() {
 
     # HARFBUZZ
     pushd ${SOURCE_DIR}
-    git clone -b 10.2.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
+    git clone -b 10.4.0 --depth=1 https://github.com/harfbuzz/harfbuzz.git
     meson setup harfbuzz harfbuzz_build \
         ${MESON_CROSS_OPT} \
         --prefix=${TARGET_DIR} \
@@ -257,7 +253,7 @@ prepare_extra_common() {
 
     # SVT-AV1
     pushd ${SOURCE_DIR}
-    git clone -b v2.3.0 --depth=1 https://gitlab.com/AOMediaCodec/SVT-AV1.git
+    git clone -b v3.0.2 --depth=1 https://gitlab.com/AOMediaCodec/SVT-AV1.git
     pushd SVT-AV1
     mkdir build
     pushd build
@@ -275,14 +271,20 @@ prepare_extra_common() {
 
     # FDK-AAC-STRIPPED
     pushd ${SOURCE_DIR}
-    git clone -b stripped4 --depth=1 https://gitlab.freedesktop.org/wtaymans/fdk-aac-stripped.git
+    mkdir fdk-aac-stripped
     pushd fdk-aac-stripped
+    fdk_aac_ver="stripped4"
+    fdk_aac_link="https://gitlab.freedesktop.org/wtaymans/fdk-aac-stripped/-/archive/${fdk_aac_ver}/fdk-aac-stripped-${fdk_aac_ver}.tar.gz"
+    wget ${fdk_aac_link} -O fdk-aac-stripped.tar.gz
+    tar xaf fdk-aac-stripped.tar.gz
+    pushd fdk-aac-stripped-${fdk_aac_ver}
     ./autogen.sh
     ./configure \
         --disable-{static,silent-rules} \
         --prefix=${TARGET_DIR} CFLAGS="-O3 -DNDEBUG" CXXFLAGS="-O3 -DNDEBUG" ${CROSS_OPT}
     make -j$(nproc) && make install && make install DESTDIR=${SOURCE_DIR}/fdk-aac-stripped
     echo "fdk-aac-stripped${TARGET_DIR}/lib/libfdk-aac.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
+    popd
     popd
     popd
 
@@ -302,7 +304,7 @@ prepare_extra_amd64() {
     pushd ${SOURCE_DIR}
     mkdir amf-headers
     pushd amf-headers
-    amf_ver="1.4.36"
+    amf_ver="1.4.36.0"
     amf_link="https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v${amf_ver}/AMF-headers-v${amf_ver}.tar.gz"
     wget ${amf_link} -O amf.tar.gz
     tar xaf amf.tar.gz
@@ -380,7 +382,7 @@ prepare_extra_amd64() {
 
     # GMMLIB
     pushd ${SOURCE_DIR}
-    git clone -b intel-gmmlib-22.6.0 --depth=1 https://github.com/intel/gmmlib.git
+    git clone -b intel-gmmlib-22.7.1 --depth=1 https://github.com/intel/gmmlib.git
     pushd gmmlib
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} ..
@@ -395,10 +397,12 @@ prepare_extra_amd64() {
     pushd ${SOURCE_DIR}
     git clone -b intel-mediasdk-23.2.2 --depth=1 https://github.com/Intel-Media-SDK/MediaSDK.git
     pushd MediaSDK
-    # fix build in gcc 13
+    # Fix build in gcc 13
     wget -q -O - https://github.com/Intel-Media-SDK/MediaSDK/commit/8fb9f5f.patch | git apply
-    # fix ADI issue with VPL patch
+    # Fix ADI issue with VPL patch
     wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/e025c82.patch | git apply
+    # Fix missing entries in PicStruct validation with VPL patch
+    wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/c7eb030.patch | git apply
     sed -i 's|MFX_PLUGINS_CONF_DIR "/plugins.cfg"|"/usr/lib/jellyfin-ffmpeg/lib/mfx/plugins.cfg"|g' api/mfx_dispatch/linux/mfxloader.cpp
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
@@ -437,8 +441,13 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-25.1.1 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.2.0 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
+    # Fix missing entries in PicStruct validation
+    wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/c7eb030.patch | git apply
+    # Remove double copy to/from GPU in hwupload and hwdownload
+    wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/dd7356e.patch | git apply
+    wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/eaad9d3.patch | git apply
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
           -DCMAKE_INSTALL_LIBDIR=${TARGET_DIR}/lib \
@@ -457,12 +466,12 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-25.1.1 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.2.0 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
-    wget -q -O - https://github.com/intel/media-driver/commit/d5dd47b.patch | git apply
+    wget -q -O - https://github.com/intel/media-driver/commit/25fb926.patch | git apply
     # Fix DG1 support in upstream i915 KMD (prod DKMS is not required)
-    wget -q -O - https://github.com/intel/media-driver/commit/620a0b7.patch | git apply
+    wget -q -O - https://github.com/intel/media-driver/commit/310d512.patch | git apply
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
           -DENABLE_KERNELS=ON \
@@ -480,7 +489,7 @@ prepare_extra_amd64() {
 
     # Vulkan Headers
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.307 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
+    git clone -b v1.4.311 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
     pushd Vulkan-Headers
     mkdir build && pushd build
     cmake \
@@ -493,7 +502,7 @@ prepare_extra_amd64() {
 
     # Vulkan ICD Loader
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.307 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
+    git clone -b v1.4.311 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
     pushd Vulkan-Loader
     mkdir build && pushd build
     cmake \
@@ -513,7 +522,7 @@ prepare_extra_amd64() {
     popd
 
     # SHADERC
-    shaderc_ver="v2023.7"
+    shaderc_ver="v2024.4"
     if [[ ${GCC_VER} -lt 9 ]]; then
         shaderc_ver="v2023.5"
     fi
@@ -542,17 +551,27 @@ prepare_extra_amd64() {
 
     # MESA
     # Minimal libs for AMD VAAPI, AMD RADV and Intel ANV
-    if [[ ${LLVM_VER} -ge 11 ]]; then
-        mesa_branch="llvm15"
-        mesa_codecs="all"
-        if [[ ${LLVM_VER} -lt 15 ]]; then
-            mesa_branch="llvm11"
-            mesa_codecs="vc1dec,h264dec,h264enc,h265dec,h265enc"
+    if [[ ${LLVM_VER} -ge 15 ]]; then
+        if [[ ${LLVMSPIRVLIB_VER} -ge 15 ]]; then
+            # Intel ANV requires llvmspirvlib >= 15
+            mesa_vk_drv="amd,intel"
+            mesa_llvm_clc="enabled"
+            apt-get install -y {llvm-,libllvmspirvlib-,libclc-,libclang-,libclang-cpp}${LLVMSPIRVLIB_VER}-dev libudev-dev
+        else
+            mesa_vk_drv="amd"
+            mesa_llvm_clc="disabled"
+            apt-get install -y libudev-dev
         fi
-        apt-get install -y llvm-${LLVM_VER}-dev libudev-dev
         pushd ${SOURCE_DIR}
-        git clone -b ${mesa_branch} --depth=1 https://gitlab.freedesktop.org/nyanmisaka/mesa.git
-        meson setup mesa mesa_build \
+        mkdir mesa
+        pushd mesa
+        mesa_ver="mesa-25.0.4"
+        mesa_link="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${mesa_ver}/mesa-${mesa_ver}.tar.gz"
+        wget ${mesa_link} -O mesa.tar.gz
+        tar xaf mesa.tar.gz
+        # Cherry-pick fixes targeting mesa-stable
+        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/ee4d7e98.patch | git -C mesa-${mesa_ver} apply
+        meson setup mesa-${mesa_ver} mesa_build \
             --prefix=${TARGET_DIR} \
             --libdir=lib \
             --buildtype=release \
@@ -561,34 +580,36 @@ prepare_extra_amd64() {
             -Db_lto=false \
             -Dplatforms=x11 \
             -Dgallium-drivers=radeonsi \
-            -Dvulkan-drivers=amd,intel \
+            -Dvulkan-drivers=${mesa_vk_drv} \
             -Dvulkan-layers=device-select,overlay \
-            -Ddri3=enabled \
             -Degl=disabled \
-            -Dgallium-{extra-hud,nine}=false \
-            -Dgallium-{omx,vdpau,xa,opencl}=disabled \
+            -Dgallium-{extra-hud,nine,rusticl}=false \
+            -Dgallium-{vdpau,xa,opencl}=disabled \
             -Dgallium-va=enabled \
-            -Dvideo-codecs=${mesa_codecs} \
+            -Dvideo-codecs=all \
             -Dgbm=disabled \
             -Dgles1=disabled \
             -Dgles2=disabled \
             -Dopengl=false \
-            -Dglvnd=false \
+            -Dglvnd=disabled \
             -Dglx=disabled \
             -Dlibunwind=disabled \
-            -Dllvm=enabled \
+            -Dllvm=${mesa_llvm_clc} \
+            -Damd-use-llvm=false \
             -Dlmsensors=disabled \
             -Dosmesa=false \
             -Dshared-glapi=disabled \
             -Dvalgrind=disabled \
             -Dtools=[] \
             -Dzstd=enabled \
-            -Dmicrosoft-clc=disabled
+            -Dmicrosoft-clc=disabled \
+            -Dintel-elk=false
         meson configure mesa_build
         ninja -j$(nproc) -C mesa_build install
         cp -a ${TARGET_DIR}/lib/libvulkan_*.so ${SOURCE_DIR}/mesa
         cp -a ${TARGET_DIR}/lib/libVkLayer_MESA*.so ${SOURCE_DIR}/mesa
-        cp -a ${TARGET_DIR}/lib/dri/radeonsi_drv_video.so ${SOURCE_DIR}/mesa
+        # radeonsi_drv_video.so -> libgallium_drv_video.so is soft link
+        cp ${TARGET_DIR}/lib/dri/radeonsi_drv_video.so ${SOURCE_DIR}/mesa
         echo "mesa/lib*.so usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
         echo "mesa/radeonsi_drv_video.so usr/lib/jellyfin-ffmpeg/lib/dri" >> ${DPKG_INSTALL_LIST}
         cp ${TARGET_DIR}/share/drirc.d/*.conf ${SOURCE_DIR}/mesa
@@ -598,11 +619,14 @@ prepare_extra_amd64() {
         echo "mesa/*overlay.json usr/lib/jellyfin-ffmpeg/share/vulkan/explicit_layer.d" >> ${DPKG_INSTALL_LIST}
         echo "mesa/*device_select.json usr/lib/jellyfin-ffmpeg/share/vulkan/implicit_layer.d" >> ${DPKG_INSTALL_LIST}
         popd
+        popd
     fi
 
     # LIBPLACEBO
     pushd ${SOURCE_DIR}
     git clone -b v7.349.0 --recursive --depth=1 https://github.com/haasn/libplacebo.git
+    # Wa for the regression made in Mesa RADV
+    git -C libplacebo apply ${SOURCE_DIR}/builder/patches/libplacebo/*.patch
     sed -i 's|env: python_env,||g' libplacebo/src/vulkan/meson.build
     meson setup libplacebo placebo_build \
         --prefix=${TARGET_DIR} \

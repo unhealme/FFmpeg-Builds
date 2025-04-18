@@ -48,5 +48,7 @@ ffbuild_configure() {
 }
 
 ffbuild_unconfigure() {
+    [[ $TARGET != linux* ]] && return 0
+    [[ $TARGET != *arm64 ]] && return 0
     echo --disable-rkrga
 }

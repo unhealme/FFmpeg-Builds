@@ -32,6 +32,7 @@
 #include "libavutil/intfloat.h"
 #include "libavutil/lfg.h"
 #include "libavutil/md5.h"
+#include "libavutil/mem.h"
 #include "libavutil/opt.h"
 #include "libavutil/random_seed.h"
 #include "avformat.h"
@@ -2917,10 +2918,6 @@ reconnect:
     return 0;
 
 fail:
-    av_freep(&rt->playpath);
-    av_freep(&rt->tcurl);
-    av_freep(&rt->flashver);
-    av_dict_free(opts);
     rtmp_close(s);
     return ret;
 }

@@ -3,6 +3,7 @@ set -xe
 cd "$(dirname "$0")"
 export BUILDER_ROOT="$(pwd)"
 export FFBUILD_PREFIX="/clang64/ffbuild"
+export CMAKE_POLICY_VERSION_MINIMUM="3.5"
 
 arch="x86_64"
 TARGET="win64-clang"
@@ -41,7 +42,6 @@ PKG_CONFIG_PATH=/clang64/ffbuild/lib/pkgconfig ./configure --cc=clang \
     --disable-debug \
     --disable-doc \
     --disable-sdl2 \
-    --disable-ptx-compression \
     --enable-lto=thin \
     --enable-gpl \
     --enable-version3 \
