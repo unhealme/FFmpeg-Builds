@@ -1,3 +1,10 @@
+jellyfin-ffmpeg (7.1.1-2) unstable; urgency=medium
+
+  * Fix VPP tonemap without having HDR10 metadata
+  * Sync fixes from ffmpeg-rockchip
+
+ -- nyanmisaka <nst799610810@gmail.com>  Tue, 22 Apr 2025 22:07:09 +0800
+
 jellyfin-ffmpeg (7.1.1-1) unstable; urgency=medium
 
   * New upstream version 7.1.1
