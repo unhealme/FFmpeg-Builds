@@ -3752,7 +3752,7 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/rkrga_common.c
-@@ -0,0 +1,1384 @@
+@@ -0,0 +1,1387 @@
 +/*
 + * Copyright (c) 2023 NyanMisaka
 + *
@@ -4876,15 +4876,18 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +        }
 +    }
 +    if (avctx->nb_inputs > 1) {
-+        const int premultiplied_alpha = r->in_rga_frame_infos[1].pix_desc->flags & AV_PIX_FMT_FLAG_ALPHA;
++        int need_premultiply = 0;
++
++        if (r->in_rga_frame_infos[1].pix_desc->flags & AV_PIX_FMT_FLAG_ALPHA)
++            need_premultiply = param->in_alpha_format == 0;
 +
 +        /* IM_ALPHA_BLEND_DST_OVER */
 +        if (param->in_global_alpha > 0 && param->in_global_alpha < 0xff) {
-+            r->in_rga_frame_infos[0].blend_mode = premultiplied_alpha ? (0x4 | (1 << 12)) : 0x4;
++            r->in_rga_frame_infos[0].blend_mode = need_premultiply ? (0x4 | (1 << 12)) : 0x4;
 +            r->in_rga_frame_infos[0].blend_mode |= (param->in_global_alpha & 0xff) << 16; /* fg_global_alpha */
 +            r->in_rga_frame_infos[0].blend_mode |= 0xff << 24;                            /* bg_global_alpha */
 +        } else
-+            r->in_rga_frame_infos[0].blend_mode = premultiplied_alpha ? 0x504 : 0x501;
++            r->in_rga_frame_infos[0].blend_mode = need_premultiply ? 0x504 : 0x501;
 +
 +        r->in_rga_frame_infos[1].overlay_x = FFMAX(param->overlay_x, 0);
 +        r->in_rga_frame_infos[1].overlay_y = FFMAX(param->overlay_y, 0);
@@ -5141,7 +5144,7 @@ Index: FFmpeg/libavfilter/rkrga_common.h
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/rkrga_common.h
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,131 @@
 +/*
 + * Copyright (c) 2023 NyanMisaka
 + *
@@ -5254,6 +5257,7 @@ Index: FFmpeg/libavfilter/rkrga_common.h
 +
 +    int in_rotate_mode;
 +    int in_global_alpha;
++    int in_alpha_format;
 +
 +    int in_crop;
 +    int in_crop_x;
@@ -5276,7 +5280,7 @@ Index: FFmpeg/libavfilter/vf_overlay_rkrga.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_overlay_rkrga.c
-@@ -0,0 +1,372 @@
+@@ -0,0 +1,377 @@
 +/*
 + * Copyright (c) 2023 NyanMisaka
 + *
@@ -5331,6 +5335,7 @@ Index: FFmpeg/libavfilter/vf_overlay_rkrga.c
 +    double var_values[VAR_VARS_NB];
 +    char *overlay_ox, *overlay_oy;
 +    int global_alpha;
++    int alpha_format;
 +    enum AVPixelFormat format;
 +} RGAOverlayContext;
 +
@@ -5476,6 +5481,7 @@ Index: FFmpeg/libavfilter/vf_overlay_rkrga.c
 +    param.filter_frame    = NULL;
 +    param.out_sw_format   = out_format;
 +    param.in_global_alpha = r->global_alpha;
++    param.in_alpha_format = r->alpha_format;
 +    param.overlay_x       = r->var_values[VAR_OX];
 +    param.overlay_y       = r->var_values[VAR_OY];
 +
@@ -5593,6 +5599,9 @@ Index: FFmpeg/libavfilter/vf_overlay_rkrga.c
 +    { "x", "Overlay x position", OFFSET(overlay_ox), AV_OPT_TYPE_STRING, { .str = "0" }, 0, 0, .flags = FLAGS },
 +    { "y", "Overlay y position", OFFSET(overlay_oy), AV_OPT_TYPE_STRING, { .str = "0" }, 0, 0, .flags = FLAGS },
 +    { "alpha", "Overlay global alpha", OFFSET(global_alpha), AV_OPT_TYPE_INT, { .i64 = 255 }, 0, 255, .flags = FLAGS },
++    { "alpha_format", "alpha format", OFFSET(alpha_format), AV_OPT_TYPE_INT, { .i64 = 0 }, 0, 1, FLAGS, .unit = "alpha_format" },
++        { "straight",      "The overlay input is unpremultiplied", 0, AV_OPT_TYPE_CONST, { .i64 = 0 }, .flags = FLAGS, .unit = "alpha_format" },
++        { "premultiplied", "The overlay input is premultiplied",   0, AV_OPT_TYPE_CONST, { .i64 = 1 }, .flags = FLAGS, .unit = "alpha_format" },
 +    { "format", "Output video pixel format", OFFSET(format), AV_OPT_TYPE_PIXEL_FMT, { .i64 = AV_PIX_FMT_NONE }, INT_MIN, INT_MAX, .flags = FLAGS },
 +    { "eof_action", "Action to take when encountering EOF from secondary input ",
 +        OFFSET(fs.opt_eof_action), AV_OPT_TYPE_INT, { .i64 = EOF_ACTION_REPEAT },

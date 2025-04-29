@@ -2,6 +2,7 @@ jellyfin-ffmpeg (7.1.1-2) unstable; urgency=medium
 
   * Fix VPP tonemap without having HDR10 metadata
   * Sync fixes from ffmpeg-rockchip
+  * Add alpha_format option for OCL/CUDA/VAAPI/RKRGA overlay filters
 
  -- nyanmisaka <nst799610810@gmail.com>  Tue, 22 Apr 2025 22:07:09 +0800
 
