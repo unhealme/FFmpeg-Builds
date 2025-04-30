@@ -304,7 +304,7 @@ prepare_extra_amd64() {
     pushd ${SOURCE_DIR}
     mkdir amf-headers
     pushd amf-headers
-    amf_ver="1.4.36.0"
+    amf_ver="1.4.36"
     amf_link="https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v${amf_ver}/AMF-headers-v${amf_ver}.tar.gz"
     wget ${amf_link} -O amf.tar.gz
     tar xaf amf.tar.gz
@@ -441,13 +441,10 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-25.2.0 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.2.1 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
     # Fix missing entries in PicStruct validation
     wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/c7eb030.patch | git apply
-    # Remove double copy to/from GPU in hwupload and hwdownload
-    wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/dd7356e.patch | git apply
-    wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/eaad9d3.patch | git apply
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
           -DCMAKE_INSTALL_LIBDIR=${TARGET_DIR}/lib \
@@ -466,12 +463,12 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-25.2.0 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.2.1 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
     wget -q -O - https://github.com/intel/media-driver/commit/25fb926.patch | git apply
     # Fix DG1 support in upstream i915 KMD (prod DKMS is not required)
-    wget -q -O - https://github.com/intel/media-driver/commit/310d512.patch | git apply
+    wget -q -O - https://github.com/intel/media-driver/commit/93c07d9.patch | git apply
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
           -DENABLE_KERNELS=ON \
@@ -565,7 +562,7 @@ prepare_extra_amd64() {
         pushd ${SOURCE_DIR}
         mkdir mesa
         pushd mesa
-        mesa_ver="mesa-25.0.4"
+        mesa_ver="mesa-25.0.5"
         mesa_link="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${mesa_ver}/mesa-${mesa_ver}.tar.gz"
         wget ${mesa_link} -O mesa.tar.gz
         tar xaf mesa.tar.gz

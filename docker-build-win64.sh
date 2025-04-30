@@ -60,7 +60,7 @@ make install
 popd
 
 # ZLIB
-git clone --depth=1 https://github.com/madler/zlib.git
+git clone -b v1.3.1 --depth=1 https://github.com/madler/zlib.git
 pushd zlib
 ./configure \
     --prefix=${FF_DEPS_PREFIX} \
@@ -70,7 +70,7 @@ make install
 popd
 
 # FREETYPE
-git clone --depth=1 https://github.com/freetype/freetype.git
+git clone -b VER-2-13-3 --depth=1 https://github.com/freetype/freetype.git
 pushd freetype
 ./autogen.sh
 ./configure \
@@ -83,7 +83,7 @@ make install
 popd
 
 # FRIBIDI
-git clone --depth=1 https://github.com/fribidi/fribidi.git
+git clone -b v1.0.16 --depth=1 https://github.com/fribidi/fribidi.git
 meson setup fribidi fribidi_build \
     --prefix=${FF_DEPS_PREFIX} \
     --cross-file=${FF_MESON_TOOLCHAIN} \
@@ -217,7 +217,7 @@ make install
 popd
 
 # LIBASS
-git clone --depth=1 https://github.com/libass/libass.git
+git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
 pushd libass
 ./autogen.sh
 ./configure \
@@ -547,7 +547,7 @@ popd
 # AMF
 mkdir amf-headers
 pushd amf-headers
-amf_ver="1.4.36.0"
+amf_ver="1.4.36"
 amf_link="https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v${amf_ver}/AMF-headers-v${amf_ver}.tar.gz"
 wget ${amf_link} -O amf.tar.gz
 tar xaf amf.tar.gz
