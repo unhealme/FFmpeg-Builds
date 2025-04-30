@@ -12,7 +12,7 @@
 0012-add-d3d11-opencl-interop-for-qsv.patch
 0013-add-vendor-id-option-for-d3d11.patch
 0014-add-vaapi-hwupload-filter.patch
-0015-disable-the-premultiplied-alpha-in-vaapi-overlay.patch
+0015-add-alpha-format-option-to-vaapi-overlay-filter.patch
 0016-add-fixes-for-nvdec-exceed-32-surfaces-error.patch
 0017-backport-fixes-for-vaapi-from-upstream.patch
 0018-backport-fixes-for-qsv-from-upstream.patch
