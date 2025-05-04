@@ -593,7 +593,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +85,614 @@ float mobius(float s, float peak) {
+@@ -71,202 +85,615 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -1225,7 +1225,8 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    unsigned idx101 = base_idx + 1 + LUT_SIZE * LUT_SIZE;
 +    unsigned idx011 = base_idx + LUT_SIZE + LUT_SIZE * LUT_SIZE;
 +
-+    // Although we have a and c as max and min value, we cannot use them in the following selection as float equality comparison is not accurate on GPU.
++    // Although we have a and c as max and min value, we cannot use them in the
++    // following selection as float equality comparison is not accurate on GPU.
 +    unsigned idx0 = select(select(idx001, idx010, (f.y >= f.z && f.y >= f.x)), idx100, (f.x >= f.y && f.x >= f.z));
 +    unsigned idx1 = select(select(idx110, idx101, (f.y <= f.z && f.y <= f.x)), idx011, (f.x <= f.y && f.x <= f.z));
 +
