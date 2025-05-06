@@ -389,7 +389,7 @@ Index: FFmpeg/libavfilter/opencl/colorspace_common.cl
      return y;
  }
  
-@@ -188,18 +254,101 @@ float3 lrgb2lrgb(float3 c) {
+@@ -188,18 +254,97 @@ float3 lrgb2lrgb(float3 c) {
  #endif
  }
  
@@ -421,19 +421,15 @@ Index: FFmpeg/libavfilter/opencl/colorspace_common.cl
 +}
 +
 +float3 lms2rgb(float r, float g, float b) {
-+  #ifndef DOVI_PERF_TRADEOFF
 +    r = eotf_st2084_common(r);
 +    g = eotf_st2084_common(g);
 +    b = eotf_st2084_common(b);
-+  #endif
 +    float rr = r * lms2rgb_matrix[0] + g * lms2rgb_matrix[1] + b * lms2rgb_matrix[2];
 +    float gg = r * lms2rgb_matrix[3] + g * lms2rgb_matrix[4] + b * lms2rgb_matrix[5];
 +    float bb = r * lms2rgb_matrix[6] + g * lms2rgb_matrix[7] + b * lms2rgb_matrix[8];
-+  #ifndef DOVI_PERF_TRADEOFF
 +    rr = inverse_eotf_st2084_common(rr);
 +    gg = inverse_eotf_st2084_common(gg);
 +    bb = inverse_eotf_st2084_common(bb);
-+  #endif
 +    return (float3)(rr, gg, bb);
 +}
  #endif
@@ -593,7 +589,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +85,618 @@ float mobius(float s, float peak) {
+@@ -71,202 +85,612 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -1201,47 +1197,41 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    float3 f = pos - convert_float3(base);
 +
 +    // Compute the base linear index.
-+    unsigned base_idx = base.x + base.y * LUT_SIZE + base.z * LUT_SIZE * LUT_SIZE;
++    uint base_idx = base.x + base.y * LUT_SIZE + base.z * LUT_SIZE * LUT_SIZE;
 +
 +#define LUT_IDX_MAX (LUT_SIZE * LUT_SIZE * LUT_SIZE - 1)
-+#define LUT_IDX_OFFSET_MAX (1 + LUT_SIZE + LUT_SIZE * LUT_SIZE)
 +
-+    base_idx = min(base_idx, (unsigned)(LUT_IDX_MAX - LUT_IDX_OFFSET_MAX));
++    // Sort the fraction offsets, so that we always have a>=b>=c
++    float a = fmax(f.x, fmax(f.y, f.z));
++    float c = fmin(f.x, fmin(f.y, f.z));
++    float b = f.x + f.y + f.z - a - c;
 +
-+    // Fetch the eight corner values of the current cube cell.
-+    float3 c000 = lut[base_idx];
-+    float3 c100 = lut[base_idx + 1];
-+    float3 c010 = lut[base_idx + LUT_SIZE];
-+    float3 c110 = lut[base_idx + 1 + LUT_SIZE];
-+    float3 c001 = lut[base_idx + LUT_SIZE * LUT_SIZE];
-+    float3 c101 = lut[base_idx + 1 + LUT_SIZE * LUT_SIZE];
-+    float3 c011 = lut[base_idx + LUT_SIZE + LUT_SIZE * LUT_SIZE];
-+    float3 c111 = lut[base_idx + 1 + LUT_SIZE + LUT_SIZE * LUT_SIZE];
++    // The initial and the last corner values of current cube will always be fetched
++    float3 c000 = lut[min(base_idx, (uint)LUT_IDX_MAX)];
++    float3 c111 = lut[min(base_idx + 1 + LUT_SIZE + LUT_SIZE * LUT_SIZE, (uint)LUT_IDX_MAX)];
 +
-+    // Determine the tetrahedron within the cube cell.
-+    // The tetrahedron selection is based on the ordering of the fractional parts.
-+    // There are 6 possibilities, we calculate them all to reduce branching on GPU.
-+    float3 cxyz = c000 + f.x * (c100 - c000) + f.y * (c110 - c100) + f.z * (c111 - c110);
-+    float3 cxzy = c000 + f.x * (c100 - c000) + f.z * (c101 - c100) + f.y * (c111 - c101);
-+    float3 czxy = c000 + f.z * (c001 - c000) + f.x * (c101 - c001) + f.y * (c111 - c101);
-+    float3 cyxz = c000 + f.y * (c010 - c000) + f.x * (c110 - c010) + f.z * (c111 - c110);
-+    float3 cyzx = c000 + f.y * (c010 - c000) + f.z * (c011 - c010) + f.x * (c111 - c011);
-+    float3 czyx = c000 + f.z * (c001 - c000) + f.y * (c011 - c001) + f.x * (c111 - c011);
++    // Select the index for vertices of the tetrahedron.
++    uint idx100 = base_idx + 1;
++    uint idx010 = base_idx + LUT_SIZE;
++    uint idx110 = base_idx + 1 + LUT_SIZE;
++    uint idx001 = base_idx + LUT_SIZE * LUT_SIZE;
++    uint idx101 = base_idx + 1 + LUT_SIZE * LUT_SIZE;
++    uint idx011 = base_idx + LUT_SIZE + LUT_SIZE * LUT_SIZE;
 +
-+    // Now select based on f
-+    float3 result = select(
-+                           select(
-+                                  cxyz,
-+                                  select(cxzy,
-+                                         czxy,
-+                                         (int3)(f.x >= f.z)),
-+                                  (int3)(f.y >= f.z)),
-+                           select(cyxz,
-+                                  select(cyzx,
-+                                         czyx,
-+                                         (int3)(f.y >= f.z)),
-+                                  (int3)(f.x >= f.z)),
-+                           (int3)(f.x >= f.y));
++    // Although we have a and c as max and min value, we cannot use them in the
++    // following selection as float equality comparison is not accurate on GPU.
++    uint idx0 = select(select(idx001, idx010, (f.y >= f.z && f.y >= f.x)), idx100, (f.x >= f.y && f.x >= f.z));
++    uint idx1 = select(select(idx110, idx101, (f.y <= f.z && f.y <= f.x)), idx011, (f.x <= f.y && f.x <= f.z));
++
++    // Fetch LUT value with determined tetrahedron
++    float3 c0 = lut[min(idx0, (uint)LUT_IDX_MAX)];
++    float3 c1 = lut[min(idx1, (uint)LUT_IDX_MAX)];
++
++    float3 ca = c0 - c000;
++    float3 cb = c1 - c0;
++    float3 cc = c111 - c1;
++
++    float3 result = c000 + a * ca + b * cb + c * cc;
 +
 +    return clamp(result, 0.0f, 1.0f);
 +}
