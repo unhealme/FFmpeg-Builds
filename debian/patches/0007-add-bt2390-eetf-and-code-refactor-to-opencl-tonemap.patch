@@ -389,7 +389,7 @@ Index: FFmpeg/libavfilter/opencl/colorspace_common.cl
      return y;
  }
  
-@@ -188,18 +254,101 @@ float3 lrgb2lrgb(float3 c) {
+@@ -188,18 +254,97 @@ float3 lrgb2lrgb(float3 c) {
  #endif
  }
  
@@ -421,19 +421,15 @@ Index: FFmpeg/libavfilter/opencl/colorspace_common.cl
 +}
 +
 +float3 lms2rgb(float r, float g, float b) {
-+  #ifndef DOVI_PERF_TRADEOFF
 +    r = eotf_st2084_common(r);
 +    g = eotf_st2084_common(g);
 +    b = eotf_st2084_common(b);
-+  #endif
 +    float rr = r * lms2rgb_matrix[0] + g * lms2rgb_matrix[1] + b * lms2rgb_matrix[2];
 +    float gg = r * lms2rgb_matrix[3] + g * lms2rgb_matrix[4] + b * lms2rgb_matrix[5];
 +    float bb = r * lms2rgb_matrix[6] + g * lms2rgb_matrix[7] + b * lms2rgb_matrix[8];
-+  #ifndef DOVI_PERF_TRADEOFF
 +    rr = inverse_eotf_st2084_common(rr);
 +    gg = inverse_eotf_st2084_common(gg);
 +    bb = inverse_eotf_st2084_common(bb);
-+  #endif
 +    return (float3)(rr, gg, bb);
 +}
  #endif
