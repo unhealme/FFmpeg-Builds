@@ -593,7 +593,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +85,615 @@ float mobius(float s, float peak) {
+@@ -71,202 +85,612 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -1201,12 +1201,9 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    float3 f = pos - convert_float3(base);
 +
 +    // Compute the base linear index.
-+    unsigned base_idx = base.x + base.y * LUT_SIZE + base.z * LUT_SIZE * LUT_SIZE;
++    uint base_idx = base.x + base.y * LUT_SIZE + base.z * LUT_SIZE * LUT_SIZE;
 +
 +#define LUT_IDX_MAX (LUT_SIZE * LUT_SIZE * LUT_SIZE - 1)
-+#define LUT_IDX_OFFSET_MAX (1 + LUT_SIZE + LUT_SIZE * LUT_SIZE)
-+
-+    base_idx = min(base_idx, (unsigned)(LUT_IDX_MAX - LUT_IDX_OFFSET_MAX));
 +
 +    // Sort the fraction offsets, so that we always have a>=b>=c
 +    float a = fmax(f.x, fmax(f.y, f.z));
@@ -1214,25 +1211,25 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    float b = f.x + f.y + f.z - a - c;
 +
 +    // The initial and the last corner values of current cube will always be fetched
-+    float3 c000 = lut[base_idx];
-+    float3 c111 = lut[base_idx + 1 + LUT_SIZE + LUT_SIZE * LUT_SIZE];
++    float3 c000 = lut[min(base_idx, (uint)LUT_IDX_MAX)];
++    float3 c111 = lut[min(base_idx + 1 + LUT_SIZE + LUT_SIZE * LUT_SIZE, (uint)LUT_IDX_MAX)];
 +
 +    // Select the index for vertices of the tetrahedron.
-+    unsigned idx100 = base_idx + 1;
-+    unsigned idx010 = base_idx + LUT_SIZE;
-+    unsigned idx110 = base_idx + 1 + LUT_SIZE;
-+    unsigned idx001 = base_idx + LUT_SIZE * LUT_SIZE;
-+    unsigned idx101 = base_idx + 1 + LUT_SIZE * LUT_SIZE;
-+    unsigned idx011 = base_idx + LUT_SIZE + LUT_SIZE * LUT_SIZE;
++    uint idx100 = base_idx + 1;
++    uint idx010 = base_idx + LUT_SIZE;
++    uint idx110 = base_idx + 1 + LUT_SIZE;
++    uint idx001 = base_idx + LUT_SIZE * LUT_SIZE;
++    uint idx101 = base_idx + 1 + LUT_SIZE * LUT_SIZE;
++    uint idx011 = base_idx + LUT_SIZE + LUT_SIZE * LUT_SIZE;
 +
 +    // Although we have a and c as max and min value, we cannot use them in the
 +    // following selection as float equality comparison is not accurate on GPU.
-+    unsigned idx0 = select(select(idx001, idx010, (f.y >= f.z && f.y >= f.x)), idx100, (f.x >= f.y && f.x >= f.z));
-+    unsigned idx1 = select(select(idx110, idx101, (f.y <= f.z && f.y <= f.x)), idx011, (f.x <= f.y && f.x <= f.z));
++    uint idx0 = select(select(idx001, idx010, (f.y >= f.z && f.y >= f.x)), idx100, (f.x >= f.y && f.x >= f.z));
++    uint idx1 = select(select(idx110, idx101, (f.y <= f.z && f.y <= f.x)), idx011, (f.x <= f.y && f.x <= f.z));
 +
 +    // Fetch LUT value with determined tetrahedron
-+    float3 c0 = lut[idx0];
-+    float3 c1 = lut[idx1];
++    float3 c0 = lut[min(idx0, (uint)LUT_IDX_MAX)];
++    float3 c1 = lut[min(idx1, (uint)LUT_IDX_MAX)];
 +
 +    float3 ca = c0 - c000;
 +    float3 cb = c1 - c0;
