@@ -9,7 +9,7 @@ DEBIAN_ADDR=http://deb.debian.org/debian/
 UBUNTU_ARCHIVE_ADDR=http://archive.ubuntu.com/ubuntu/
 UBUNTU_PORTS_ADDR=http://ports.ubuntu.com/ubuntu-ports/
 
-# Prepare common extra libs for amd64, armhf and arm64
+# Prepare common extra libs for amd64 and arm64
 prepare_extra_common() {
     case ${ARCH} in
         'amd64')
@@ -17,12 +17,6 @@ prepare_extra_common() {
             CROSS_OPT=""
             CMAKE_TOOLCHAIN_OPT=""
             MESON_CROSS_OPT=""
-        ;;
-        'armhf')
-            CROSS_PREFIX_OPT="arm-linux-gnueabihf-"
-            CROSS_OPT="--host=armv7-linux-gnueabihf CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++"
-            CMAKE_TOOLCHAIN_OPT="-DCMAKE_TOOLCHAIN_FILE=${SOURCE_DIR}/toolchain-${ARCH}.cmake"
-            MESON_CROSS_OPT="--cross-file=${SOURCE_DIR}/cross-${ARCH}.meson"
         ;;
         'arm64')
             CROSS_PREFIX_OPT="aarch64-linux-gnu-"
@@ -684,44 +678,6 @@ prepare_extra_arm() {
 }
 
 # Prepare the cross-toolchain
-prepare_crossbuild_env_armhf() {
-    # Prepare the Ubuntu-specific cross-build requirements
-    if [[ $( lsb_release -i -s ) == "Debian" ]]; then
-        CODENAME="$( lsb_release -c -s )"
-        echo "deb [arch=amd64] ${DEBIAN_ADDR} ${CODENAME}-backports main restricted universe multiverse" >> /etc/apt/sources.list
-        echo "deb [arch=armhf] ${DEBIAN_ADDR} ${CODENAME}-backports main restricted universe multiverse" >> /etc/apt/sources.list
-    fi
-    if [[ $( lsb_release -i -s ) == "Ubuntu" ]]; then
-        CODENAME="$( lsb_release -c -s )"
-        # Remove the default sources
-        rm -f /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources
-        # Add arch-specific list files
-        cat <<EOF > /etc/apt/sources.list.d/amd64.list
-deb [arch=amd64] ${UBUNTU_ARCHIVE_ADDR} ${CODENAME} main restricted universe multiverse
-deb [arch=amd64] ${UBUNTU_ARCHIVE_ADDR} ${CODENAME}-updates main restricted universe multiverse
-deb [arch=amd64] ${UBUNTU_ARCHIVE_ADDR} ${CODENAME}-backports main restricted universe multiverse
-deb [arch=amd64] ${UBUNTU_ARCHIVE_ADDR} ${CODENAME}-security main restricted universe multiverse
-EOF
-        cat <<EOF > /etc/apt/sources.list.d/armhf.list
-deb [arch=armhf] ${UBUNTU_PORTS_ADDR} ${CODENAME} main restricted universe multiverse
-deb [arch=armhf] ${UBUNTU_PORTS_ADDR} ${CODENAME}-updates main restricted universe multiverse
-deb [arch=armhf] ${UBUNTU_PORTS_ADDR} ${CODENAME}-backports main restricted universe multiverse
-deb [arch=armhf] ${UBUNTU_PORTS_ADDR} ${CODENAME}-security main restricted universe multiverse
-EOF
-    fi
-    # Add armhf architecture
-    dpkg --add-architecture armhf
-    # Update and install cross-gcc-dev
-    apt-get update && apt-get dist-upgrade -y
-    yes | apt-get install -y cross-gcc-dev
-    # Generate gcc cross source
-    TARGET_LIST="armhf" cross-gcc-gensource ${GCC_VER}
-    # Install dependencies
-    pushd cross-gcc-packages-amd64/cross-gcc-${GCC_VER}-armhf
-    ln -fs /usr/share/zoneinfo/America/Toronto /etc/localtime
-    yes | apt-get install -y -o Dpkg::Options::="--force-overwrite" -o APT::Immediate-Configure=0 gcc-${GCC_VER}-source gcc-${GCC_VER}-arm-linux-gnueabihf g++-${GCC_VER}-arm-linux-gnueabihf libstdc++6-armhf-cross binutils-arm-linux-gnueabihf bison flex libtool gdb sharutils netbase libmpc-dev libmpfr-dev systemtap-sdt-dev autogen expect chrpath zip libc6-dev:armhf linux-libc-dev:armhf libgcc1:armhf libstdc++6:armhf
-    popd
-}
 prepare_crossbuild_env_arm64() {
     # Prepare the Ubuntu-specific cross-build requirements
     if [[ $( lsb_release -i -s ) == "Debian" ]]; then
@@ -770,17 +726,6 @@ case ${ARCH} in
         CONFIG_SITE=""
         DEP_ARCH_OPT=""
         BUILD_ARCH_OPT=""
-    ;;
-    'armhf')
-        prepare_crossbuild_env_armhf
-        ln -s /usr/bin/arm-linux-gnueabihf-gcc-${GCC_VER} /usr/bin/arm-linux-gnueabihf-gcc
-        ln -s /usr/bin/arm-linux-gnueabihf-gcc-ar-${GCC_VER} /usr/bin/arm-linux-gnueabihf-gcc-ar
-        ln -s /usr/bin/arm-linux-gnueabihf-g++-${GCC_VER} /usr/bin/arm-linux-gnueabihf-g++
-        prepare_extra_common
-        prepare_extra_arm
-        CONFIG_SITE="/etc/dpkg-cross/cross-config.${ARCH}"
-        DEP_ARCH_OPT="--host-arch armhf"
-        BUILD_ARCH_OPT="-aarmhf"
     ;;
     'arm64')
         prepare_crossbuild_env_arm64

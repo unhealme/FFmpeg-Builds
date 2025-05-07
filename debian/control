@@ -42,7 +42,7 @@ Build-Depends:
 # --enable-libzvbi
  libzvbi-dev,
 # --enable-cuda-llvm
- clang:amd64 [!armhf],
+ clang:amd64,
 # --enable-opencl
  ocl-icd-opencl-dev,
 # used to detect libraries
@@ -53,7 +53,7 @@ Build-Depends:
  nasm
 
 Package: jellyfin-ffmpeg7
-Architecture: amd64 armhf arm64
+Architecture: amd64 arm64
 Multi-Arch: foreign
 Replaces: jellyfin-ffmpeg, jellyfin-ffmpeg5, jellyfin-ffmpeg6
 Conflicts: jellyfin-ffmpeg, jellyfin-ffmpeg5, jellyfin-ffmpeg6
