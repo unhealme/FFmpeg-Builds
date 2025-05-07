@@ -11,7 +11,7 @@ jobs:
     with:
       distro: 'debian'
       codenames: '["bullseye", "bookworm"]'
-      architectures: '["amd64", "arm64", "armhf"]'
+      architectures: '["amd64", "arm64"]'
       release: true
     secrets:
       deploy-host: ${{ secrets.REPO_HOST }}
@@ -23,7 +23,7 @@ jobs:
     with:
       distro: 'ubuntu'
       codenames: '["focal", "jammy", "noble"]'
-      architectures: '["amd64", "arm64", "armhf"]'
+      architectures: '["amd64", "arm64"]'
       release: true
     secrets:
       deploy-host: ${{ secrets.REPO_HOST }}
