@@ -59,8 +59,8 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
  
  
 @@ -1809,7 +1813,16 @@ static void opencl_frames_uninit(AVHWFra
-         av_freep(&priv->mapped_frames);
      }
+     av_freep(&priv->mapped_frames);
  #endif
 -
 +#if HAVE_OPENCL_D3D11
@@ -190,29 +190,27 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
      OpenCLDeviceContext  *device_priv = dst_fc->device_ctx->hwctx;
      OpenCLFramesContext  *frames_priv = dst_fc->hwctx;
      AVOpenCLDeviceContext    *dst_dev = &device_priv->p;
-@@ -2652,6 +2765,21 @@ static int opencl_map_from_d3d11_qsv(AVH
+@@ -2685,6 +2798,19 @@ static int opencl_map_from_d3d11_qsv(AVH
          }
      }
  
 +    if (src_hwctx->require_sync) {
-+        err = opencl_init_d3d11_sync_point(frames_priv,
-+                                           device_hwctx,
++        err = opencl_init_d3d11_sync_point(frames_priv, device_hwctx,
 +                                           tex, dst_fc);
 +        if (err < 0)
-+            return err;
++            goto fail2;
 +
 +        if (frames_priv->sync_point || frames_priv->sync_tex_2x2) {
-+            opencl_sync_d3d11_texture(frames_priv,
-+                                      device_hwctx,
++            opencl_sync_d3d11_texture(frames_priv, device_hwctx,
 +                                      tex, (derived_frames ? index : 0),
 +                                      dst_fc);
 +        }
 +    }
 +
-     if (derived_frames) {
+     if (derived_frames)
          desc = &frames_priv->mapped_frames[index];
-     } else {
-@@ -2843,6 +2971,10 @@ static void opencl_unmap_from_d3d11(AVHW
+     else {
+@@ -2806,6 +2932,10 @@ static void opencl_unmap_from_d3d11(AVHW
  static int opencl_map_from_d3d11(AVHWFramesContext *dst_fc, AVFrame *dst,
                                   const AVFrame *src, int flags)
  {
@@ -222,50 +220,31 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 +    AVD3D11VADeviceContext *device_hwctx = src_fc->device_ctx->hwctx;
      OpenCLDeviceContext  *device_priv = dst_fc->device_ctx->hwctx;
      OpenCLFramesContext  *frames_priv = dst_fc->hwctx;
-     AVOpenCLFrameDescriptor *desc;
-@@ -2873,6 +3005,14 @@ static int opencl_map_from_d3d11(AVHWFra
-     mem_objs = device_priv->d3d11_map_amd ? &desc->planes[nb_planes]
-                                           : desc->planes;
- 
-+    if (src_hwctx->require_sync &&
-+        frames_priv->sync_point && frames_priv->sync_tex_2x2) {
-+        opencl_sync_d3d11_texture(frames_priv,
-+                                  device_hwctx,
-+                                  (ID3D11Texture2D*)src->data[0], index,
-+                                  dst_fc);
-+    }
-+
-     cle = device_priv->clEnqueueAcquireD3D11ObjectsKHR(
-         frames_priv->command_queue, num_objs, mem_objs,
-         0, NULL, &event);
-@@ -2912,6 +3052,7 @@ fail:
- static int opencl_frames_derive_from_d3d11(AVHWFramesContext *dst_fc,
-                                            AVHWFramesContext *src_fc, int flags)
- {
-+    AVD3D11VADeviceContext *device_hwctx = src_fc->device_ctx->hwctx;
-     AVD3D11VAFramesContext *src_hwctx = src_fc->hwctx;
-     OpenCLDeviceContext  *device_priv = dst_fc->device_ctx->hwctx;
      AVOpenCLDeviceContext    *dst_dev = &device_priv->p;
-@@ -2954,6 +3095,14 @@ static int opencl_frames_derive_from_d3d
-     if (!frames_priv->mapped_frames)
-         return AVERROR(ENOMEM);
+@@ -2865,6 +2995,18 @@ static int opencl_map_from_d3d11(AVHWFra
+         }
+     }
  
 +    if (src_hwctx->require_sync) {
-+        err = opencl_init_d3d11_sync_point(frames_priv,
-+                                           device_hwctx,
-+                                           src_hwctx->texture, dst_fc);
++        err = opencl_init_d3d11_sync_point(frames_priv, device_hwctx,
++                                           tex, dst_fc);
 +        if (err < 0)
-+            return err;
++            goto fail2;
++
++        if (frames_priv->sync_point || frames_priv->sync_tex_2x2) {
++            opencl_sync_d3d11_texture(frames_priv, device_hwctx,
++                                      tex, index, dst_fc);
++        }
 +    }
 +
-     for (i = 0; i < frames_priv->nb_mapped_frames; i++) {
-         AVOpenCLFrameDescriptor *desc = &frames_priv->mapped_frames[i];
-         desc->nb_planes = nb_planes;
+     desc = &frames_priv->mapped_frames[index];
+ 
+     // deferred clCreateFromD3D11Texture2DKHR() for low startup latency.
 Index: FFmpeg/libavutil/hwcontext_qsv.c
 ===================================================================
 --- FFmpeg.orig/libavutil/hwcontext_qsv.c
 +++ FFmpeg/libavutil/hwcontext_qsv.c
-@@ -2016,6 +2016,7 @@ static int qsv_dynamic_frames_derive_to(
+@@ -2064,6 +2064,7 @@ static int qsv_dynamic_frames_derive_to(
          } else {
              dst_hwctx->frame_type |= MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET;
          }
@@ -273,7 +252,7 @@ Index: FFmpeg/libavutil/hwcontext_qsv.c
      }
      break;
  #endif
-@@ -2091,6 +2092,7 @@ static int qsv_fixed_frames_derive_to(AV
+@@ -2139,6 +2140,7 @@ static int qsv_fixed_frames_derive_to(AV
              } else {
                  dst_hwctx->frame_type |= MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET;
              }

@@ -6,6 +6,7 @@ jellyfin-ffmpeg (7.1.1-3) unstable; urgency=medium
   * Fix VUI full range flag in RKMPP encoded videos
   * Increase default frame pool size for D3D11VA AV1/VP9
   * Handle NOPTS and no extradata in RKMPP decoders
+  * Defer DX11 to OCL mapping for low startup latency
 
  -- nyanmisaka <nst799610810@gmail.com>  Tue, 6 May 2025 21:12:22 +0800
 
