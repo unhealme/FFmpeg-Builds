@@ -1,3 +1,14 @@
+jellyfin-ffmpeg (7.1.1-3) unstable; urgency=medium
+
+  * avfilter/tonemap_opencl: reduce compute and memory load of 3dlut
+  * avfilter/tonemap_opencl: always use eotf for lms2rgb
+  * Add FP16 tradeoff for DOVI reshaping
+  * Fix VUI full range flag in RKMPP encoded videos
+  * Increase default frame pool size for D3D11VA AV1/VP9
+  * Handle NOPTS and no extradata in RKMPP decoders
+
+ -- nyanmisaka <nst799610810@gmail.com>  Tue, 6 May 2025 21:12:22 +0800
+
 jellyfin-ffmpeg (7.1.1-2) unstable; urgency=medium
 
   * Fix VPP tonemap without having HDR10 metadata

@@ -37,10 +37,12 @@ Index: FFmpeg/configure
  h264_amf_encoder_deps="amf"
  h264_cuvid_decoder_deps="cuvid"
  h264_cuvid_decoder_select="h264_mp4toannexb_bsf"
-@@ -3363,6 +3368,7 @@ h264_qsv_decoder_select="h264_mp4toannex
+@@ -3362,7 +3367,8 @@ h264_omx_encoder_deps="omx"
+ h264_qsv_decoder_select="h264_mp4toannexb_bsf qsvdec"
  h264_qsv_encoder_select="atsc_a53 qsvenc"
  h264_rkmpp_decoder_deps="rkmpp"
- h264_rkmpp_decoder_select="h264_mp4toannexb_bsf"
+-h264_rkmpp_decoder_select="h264_mp4toannexb_bsf"
++h264_rkmpp_decoder_select="h264_mp4toannexb_bsf dump_extradata_bsf"
 +h264_rkmpp_encoder_deps="rkmpp"
  h264_vaapi_encoder_select="atsc_a53 cbs_h264 vaapi_encode"
  h264_vulkan_encoder_select="cbs_h264 vulkan_encode"
@@ -50,7 +52,7 @@ Index: FFmpeg/configure
  hevc_qsv_encoder_select="hevcparse qsvenc"
  hevc_rkmpp_decoder_deps="rkmpp"
 -hevc_rkmpp_decoder_select="hevc_mp4toannexb_bsf"
-+hevc_rkmpp_decoder_select="dovi_rpudec hevcparse hevc_mp4toannexb_bsf"
++hevc_rkmpp_decoder_select="hevc_mp4toannexb_bsf dump_extradata_bsf dovi_rpudec hevcparse"
 +hevc_rkmpp_encoder_deps="rkmpp"
  hevc_vaapi_encoder_deps="VAEncPictureParameterBufferHEVC"
  hevc_vaapi_encoder_select="atsc_a53 cbs_h265 vaapi_encode"
@@ -294,7 +296,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
   *
   * This file is part of FFmpeg.
   *
-@@ -19,551 +20,1276 @@
+@@ -19,551 +20,1301 @@
   * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
   */
  
@@ -515,12 +517,14 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    }
 +
 +    return NULL;
-+}
-+
+ }
+ 
+-static void rkmpp_release_decoder(FFRefStructOpaque unused, void *obj)
 +static void clear_unused_sd_frames(SideDataFrame *list,
 +                                   int64_t in_pts,
 +                                   int64_t out_pts)
-+{
+ {
+-    RKMPPDecoder *decoder = obj;
 +    while (list) {
 +        if (list->queued == 1) {
 +            AVFrame *frame = list->frame;
@@ -535,7 +539,11 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +        list = list->next;
 +    }
 +}
-+
+ 
+-    if (decoder->mpi) {
+-        decoder->mpi->reset(decoder->ctx);
+-        mpp_destroy(decoder->ctx);
+-        decoder->ctx = NULL;
 +static void clear_sd_frame_list(SideDataFrame **list)
 +{
 +    while (*list) {
@@ -546,18 +554,12 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +        av_frame_free(&sd_frame->frame);
 +        av_freep(&sd_frame);
 +    }
- }
- 
--static void rkmpp_release_decoder(FFRefStructOpaque unused, void *obj)
++}
++
 +static SideDataFrame *get_free_sd_frame(SideDataFrame **list)
- {
--    RKMPPDecoder *decoder = obj;
++{
 +    SideDataFrame *out = *list;
- 
--    if (decoder->mpi) {
--        decoder->mpi->reset(decoder->ctx);
--        mpp_destroy(decoder->ctx);
--        decoder->ctx = NULL;
++
 +    for (; out; out = out->next) {
 +        if (!out->queued) {
 +            out->queued = 1;
@@ -597,6 +599,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    RKMPPDecContext *r = avctx->priv_data;
  
 -    avctx->pix_fmt = AV_PIX_FMT_DRM_PRIME;
++    r->last_pts = AV_NOPTS_VALUE;
 +    r->eof = 0;
 +    r->draining = 0;
 +    r->info_change = 0;
@@ -606,7 +609,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +#if CONFIG_HEVC_RKMPP_DECODER
 +    if (avctx->codec_id == AV_CODEC_ID_HEVC) {
 +        r->parsed_extradata = 0;
-+        r->last_pts_in = AV_NOPTS_VALUE;
++        r->last_pts_dovi = AV_NOPTS_VALUE;
 +        ff_dovi_ctx_unref(&r->dovi_ctx);
 +        av_buffer_unref(&r->rpu_buf);
 +        ff_h2645_packet_uninit(&r->h2645_pkt);
@@ -804,12 +807,8 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +#if CONFIG_RKRGA
 +        }
 +#endif
-     }
- 
--    ret = decoder->mpi->control(decoder->ctx, MPP_DEC_SET_EXT_BUF_GROUP, decoder->frame_group);
--    if (ret) {
--        av_log(avctx, AV_LOG_ERROR, "Failed to assign buffer group (code = %d)\n", ret);
--        ret = AVERROR_UNKNOWN;
++    }
++
 +    if (r->afbc) {
 +        MppFrameFormat afbc_fmt = MPP_FRAME_FBC_AFBC_V2;
 +
@@ -845,8 +844,12 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +            goto fail;
 +        }
 +        av_log(avctx, AV_LOG_VERBOSE, "Created a RKMPP hardware device\n");
-+    }
-+
+     }
+ 
+-    ret = decoder->mpi->control(decoder->ctx, MPP_DEC_SET_EXT_BUF_GROUP, decoder->frame_group);
+-    if (ret) {
+-        av_log(avctx, AV_LOG_ERROR, "Failed to assign buffer group (code = %d)\n", ret);
+-        ret = AVERROR_UNKNOWN;
 +#if CONFIG_HEVC_RKMPP_DECODER
 +    /* prepare for parsing dovi rpu for HEVC */
 +    r->dovi_ctx.logctx = avctx;
@@ -1037,23 +1040,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +            break;
 +        default:
 +            return 0;
-+    }
-+
-+    sd = av_frame_get_side_data(frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
-+    if (sd)
-+        mastering = (AVMasteringDisplayMetadata *)sd->data;
-+    else
-+        mastering = av_mastering_display_metadata_create_side_data(frame);
-+    if (!mastering)
-+        return AVERROR(ENOMEM);
-+
-+    for (i = 0; i < 3; i++) {
-+        const int j = mapping[i];
-+        mastering->display_primaries[i][0] = av_make_q(mpp_mastering.display_primaries[j][0], chroma_den);
-+        mastering->display_primaries[i][1] = av_make_q(mpp_mastering.display_primaries[j][1], chroma_den);
      }
-+    mastering->white_point[0] = av_make_q(mpp_mastering.white_point[0], chroma_den);
-+    mastering->white_point[1] = av_make_q(mpp_mastering.white_point[1], chroma_den);
  
 -    // on first packet, send extradata
 -    if (decoder->first_packet) {
@@ -1073,10 +1060,26 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 -    ret = rkmpp_write_data(avctx, avpkt->data, avpkt->size, avpkt->pts);
 -    if (ret && ret!=AVERROR(EAGAIN))
 -        av_log(avctx, AV_LOG_ERROR, "Failed to write data to decoder (code = %d)\n", ret);
-+    mastering->max_luminance = av_make_q(mpp_mastering.max_luminance, max_luma_den);
-+    mastering->min_luminance = av_make_q(mpp_mastering.min_luminance, min_luma_den);
++    sd = av_frame_get_side_data(frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
++    if (sd)
++        mastering = (AVMasteringDisplayMetadata *)sd->data;
++    else
++        mastering = av_mastering_display_metadata_create_side_data(frame);
++    if (!mastering)
++        return AVERROR(ENOMEM);
++
++    for (i = 0; i < 3; i++) {
++        const int j = mapping[i];
++        mastering->display_primaries[i][0] = av_make_q(mpp_mastering.display_primaries[j][0], chroma_den);
++        mastering->display_primaries[i][1] = av_make_q(mpp_mastering.display_primaries[j][1], chroma_den);
++    }
++    mastering->white_point[0] = av_make_q(mpp_mastering.white_point[0], chroma_den);
++    mastering->white_point[1] = av_make_q(mpp_mastering.white_point[1], chroma_den);
  
 -    return ret;
++    mastering->max_luminance = av_make_q(mpp_mastering.max_luminance, max_luma_den);
++    mastering->min_luminance = av_make_q(mpp_mastering.min_luminance, min_luma_den);
++
 +    mastering->has_luminance = 1;
 +    mastering->has_primaries = 1;
 +
@@ -1222,34 +1225,34 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    if ((ret = frame_create_buf(frame, mpp_frame, mpp_frame_get_buf_size(mpp_frame),
 +                                rkmpp_free_mpp_frame, mpp_frame, AV_BUFFER_FLAG_READONLY)) < 0)
 +        return ret;
-+
-+    if ((ret = frame_create_buf(frame, (uint8_t *)desc, sizeof(*desc),
-+                                rkmpp_free_drm_desc, desc, AV_BUFFER_FLAG_READONLY)) < 0)
-+        return ret;
  
 -            av_log(avctx, AV_LOG_INFO, "Decoder noticed an info change (%dx%d), format=%d\n",
 -                                        (int)mpp_frame_get_width(mppframe), (int)mpp_frame_get_height(mppframe),
 -                                        (int)mpp_frame_get_fmt(mppframe));
-+    frame->data[0] = (uint8_t *)desc;
++    if ((ret = frame_create_buf(frame, (uint8_t *)desc, sizeof(*desc),
++                                rkmpp_free_drm_desc, desc, AV_BUFFER_FLAG_READONLY)) < 0)
++        return ret;
  
 -            avctx->width = mpp_frame_get_width(mppframe);
 -            avctx->height = mpp_frame_get_height(mppframe);
++    frame->data[0] = (uint8_t *)desc;
+ 
+-            decoder->mpi->control(decoder->ctx, MPP_DEC_SET_INFO_CHANGE_READY, NULL);
 +    frame->hw_frames_ctx = av_buffer_ref(r->hwframe);
 +    if (!frame->hw_frames_ctx)
 +        return AVERROR(ENOMEM);
  
--            decoder->mpi->control(decoder->ctx, MPP_DEC_SET_INFO_CHANGE_READY, NULL);
+-            av_buffer_unref(&decoder->frames_ref);
 +    if ((ret = ff_decode_frame_props(avctx, frame)) < 0)
 +        return ret;
- 
--            av_buffer_unref(&decoder->frames_ref);
-+    frame->width  = avctx->width;
-+    frame->height = avctx->height;
  
 -            decoder->frames_ref = av_hwframe_ctx_alloc(decoder->device_ref);
 -            if (!decoder->frames_ref) {
 -                ret = AVERROR(ENOMEM);
 -                goto fail;
++    frame->width  = avctx->width;
++    frame->height = avctx->height;
++
 +    mpp_frame_pts = mpp_frame_get_pts(mpp_frame);
 +    frame->pts    = MPP_PTS_TO_PTS(mpp_frame_pts, avctx->pkt_timebase);
 +
@@ -1296,7 +1299,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +                memcpy(sd_dst->data, sd_src->data, sd_src->size);
              }
 +        }
-+        clear_unused_sd_frames(r->sd_frame_list, r->last_pts_in, mpp_frame_pts); /* display order */
++        clear_unused_sd_frames(r->sd_frame_list, r->last_pts_dovi, mpp_frame_pts); /* display order */
 +    }
 +#endif
  
@@ -1659,11 +1662,18 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 -        if (ret != MPP_OK) {
 -            av_log(avctx, AV_LOG_ERROR, "Failed to get decoder used slots (code = %d).\n", ret);
 -            return ret;
+-        }
 +    RKMPPDecContext *r = avctx->priv_data;
 +    MppPacket mpp_pkt = NULL;
 +    int64_t mpp_pkt_pts = PTS_TO_MPP_PTS(pkt->pts, avctx->pkt_timebase);
++    int64_t last_pts = r->last_pts;
 +    int ret;
-+
+ 
+-        freeslots = INPUT_MAX_PACKETS - usedslots;
+-        if (freeslots > 0) {
+-            ret = ff_decode_get_packet(avctx, &pkt);
+-            if (ret < 0 && ret != AVERROR_EOF) {
+-                return ret;
 +    /* avoid sending new data after EOS */
 +    if (r->draining)
 +        return AVERROR(EOF);
@@ -1677,6 +1687,27 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +        return 0;
 +    }
 +
++    /* make up some pts if it's not available from pkt */
++    if (pkt->pts == AV_NOPTS_VALUE) {
++        int64_t pts_diff = 1;
++        AVRational framerate = { avctx->framerate.num,
++                                 avctx->framerate.den };
++
++        if (avctx->pkt_timebase.num && avctx->pkt_timebase.den) {
++            if (!(framerate.num && framerate.den)) {
++                framerate.num = 25;
++                framerate.den = 1;
+             }
++            pts_diff = (avctx->pkt_timebase.den * framerate.den) /
++                       (avctx->pkt_timebase.num * framerate.num);
++        }
++        last_pts += pts_diff;
+ 
+-            ret = rkmpp_send_packet(avctx, &pkt);
+-            av_packet_unref(&pkt);
++        mpp_pkt_pts = PTS_TO_MPP_PTS(last_pts, avctx->pkt_timebase);
++    }
+ 
 +    if ((ret = mpp_packet_init(&mpp_pkt, pkt->data, pkt->size)) != MPP_OK) {
 +        av_log(avctx, AV_LOG_ERROR, "Failed to init packet: %d\n", ret);
 +        return AVERROR_EXTERNAL;
@@ -1688,6 +1719,9 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +        mpp_packet_deinit(&mpp_pkt);
 +        return AVERROR(EAGAIN);
 +    }
++    /* update the last pts */
++    r->last_pts = pkt->pts == AV_NOPTS_VALUE ? last_pts : pkt->pts;
++
 +    av_log(avctx, AV_LOG_DEBUG, "Wrote %d bytes to decoder\n", pkt->size);
 +
 +#if CONFIG_HEVC_RKMPP_DECODER
@@ -1695,9 +1729,8 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    if (avctx->codec_id == AV_CODEC_ID_HEVC) {
 +        const AVPixFmtDescriptor *pix_desc, *pix_desc_sw;
 +        int split_flags;
-+        uint8_t *sd;
++        uint8_t *sd = NULL;
 +        size_t sd_size;
-+        SideDataFrame *sd_frame;
 +
 +        pix_desc = av_pix_fmt_desc_get(avctx->pix_fmt);
 +        if (!pix_desc)
@@ -1724,15 +1757,9 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +                goto exit;
 +
 +            r->parsed_extradata = 1;
-         }
++        }
 +        split_flags = (H2645_FLAG_IS_NALFF * !!r->is_nalff) | H2645_FLAG_SMALL_PADDING;
- 
--        freeslots = INPUT_MAX_PACKETS - usedslots;
--        if (freeslots > 0) {
--            ret = ff_decode_get_packet(avctx, &pkt);
--            if (ret < 0 && ret != AVERROR_EOF) {
--                return ret;
--            }
++
 +        /* prepare dovi config for dovi ctx */
 +        sd = av_packet_get_side_data(pkt, AV_PKT_DATA_DOVI_CONF, &sd_size);
 +        if (sd && sd_size >= sizeof(r->dovi_ctx.cfg)) {
@@ -1752,9 +1779,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +                   "Error splitting the input into NAL units\n");
 +            goto exit;
 +        }
- 
--            ret = rkmpp_send_packet(avctx, &pkt);
--            av_packet_unref(&pkt);
++
 +        /* check for RPU delimiter - unregistered NALs of type 62 */
 +        if (r->h2645_pkt.nb_nals > 1 && r->h2645_pkt.nals[r->h2645_pkt.nb_nals - 1].type == HEVC_NAL_UNSPEC62 &&
 +            r->h2645_pkt.nals[r->h2645_pkt.nb_nals - 1].size > 2 && !r->h2645_pkt.nals[r->h2645_pkt.nb_nals - 1].nuh_layer_id
@@ -1767,7 +1792,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +            if (!r->rpu_buf)
 +                goto exit;
 +            memcpy(r->rpu_buf->data, nal->raw_data + 2, nal->raw_size - 2);
- 
++
 +            ret = ff_dovi_rpu_parse(&r->dovi_ctx, nal->data + 2, nal->size - 2,
 +                                    avctx->err_recognition);
              if (ret < 0) {
@@ -1776,19 +1801,18 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +                av_buffer_unref(&r->rpu_buf);
 +                av_log(avctx, AV_LOG_DEBUG, "Error parsing DOVI NAL unit\n");
 +                goto exit;
-             }
-         }
- 
--        // make sure we keep decoder full
--        if (freeslots > 1)
--            return AVERROR(EAGAIN);
++            }
++        }
++
 +        /* queue dovi sidedata to the list */
 +        {
++            SideDataFrame *sd_frame = NULL;
 +            AVFrame *tmp_frame = av_frame_alloc();
++
 +            if (!tmp_frame)
 +                goto exit;
 +
-+            tmp_frame->pts = r->last_pts_in = mpp_pkt_pts;
++            tmp_frame->pts = r->last_pts_dovi = mpp_pkt_pts;
 +
 +            if (r->rpu_buf) {
 +                AVFrameSideData *rpu;
@@ -1811,14 +1835,13 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +            if (!sd_frame) {
 +                av_frame_free(&tmp_frame);
 +                goto exit;
-+            }
+             }
 +
 +            sd_frame->frame = tmp_frame;
-+        }
-     }
+         }
++    }
 +#endif
- 
--    return rkmpp_retrieve_frame(avctx, frame);
++
 +exit:
 +    mpp_packet_deinit(&mpp_pkt);
 +    return 0;
@@ -1836,7 +1859,10 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    /* no more frames after EOS */
 +    if (r->eof)
 +        return AVERROR_EOF;
-+
+ 
+-        // make sure we keep decoder full
+-        if (freeslots > 1)
+-            return AVERROR(EAGAIN);
 +    /* drain remain frames */
 +    if (r->draining) {
 +        ret = rkmpp_get_frame(avctx, frame, MPP_TIMEOUT_BLOCK);
@@ -1876,8 +1902,9 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +                pkt->size = 0;
 +            }
 +        }
-+    }
-+
+     }
+ 
+-    return rkmpp_retrieve_frame(avctx, frame);
 +exit:
 +    if (r->draining &&
 +        ret == AVERROR(EAGAIN))
@@ -1906,7 +1933,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +#if CONFIG_HEVC_RKMPP_DECODER
 +        if (avctx->codec_id == AV_CODEC_ID_HEVC) {
 +            r->parsed_extradata = 0;
-+            r->last_pts_in = AV_NOPTS_VALUE;
++            r->last_pts_dovi = AV_NOPTS_VALUE;
 +            ff_dovi_ctx_flush(&r->dovi_ctx);
 +            av_buffer_unref(&r->rpu_buf);
 +            clear_sd_frame_list(&r->sd_frame_list);
@@ -1961,10 +1988,10 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +DEFINE_RKMPP_DECODER(h263, H263, NULL)
 +#endif
 +#if CONFIG_H264_RKMPP_DECODER
-+DEFINE_RKMPP_DECODER(h264, H264, "h264_mp4toannexb")
++DEFINE_RKMPP_DECODER(h264, H264, "h264_mp4toannexb,dump_extra")
 +#endif
 +#if CONFIG_HEVC_RKMPP_DECODER
-+DEFINE_RKMPP_DECODER(hevc, HEVC, "hevc_mp4toannexb")
++DEFINE_RKMPP_DECODER(hevc, HEVC, "hevc_mp4toannexb,dump_extra")
 +#endif
 +#if CONFIG_VP8_RKMPP_DECODER
 +DEFINE_RKMPP_DECODER(vp8, VP8, NULL)
@@ -1988,7 +2015,7 @@ Index: FFmpeg/libavcodec/rkmppdec.h
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavcodec/rkmppdec.h
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,177 @@
 +/*
 + * Copyright (c) 2017 Lionel CHAZALLON
 + * Copyright (c) 2023 Huseyin BIYIK
@@ -2072,9 +2099,10 @@ Index: FFmpeg/libavcodec/rkmppdec.h
 +    DOVIContext    dovi_ctx;
 +    AVBufferRef   *rpu_buf;
 +    SideDataFrame *sd_frame_list;
-+    int64_t        last_pts_in;
++    int64_t        last_pts_dovi;
 +#endif
 +
++    int64_t        last_pts;
 +    AVPacket       last_pkt;
 +    int            eof;
 +    int            draining;
@@ -2169,7 +2197,7 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavcodec/rkmppenc.c
-@@ -0,0 +1,1209 @@
+@@ -0,0 +1,1220 @@
 +/*
 + * Copyright (c) 2023 Huseyin BIYIK
 + * Copyright (c) 2023 NyanMisaka
@@ -2528,6 +2556,17 @@ Index: FFmpeg/libavcodec/rkmppenc.c
 +    mpp_enc_cfg_set_s32(cfg, "prep:mirroring", 0);
 +    mpp_enc_cfg_set_s32(cfg, "prep:rotation", 0);
 +    mpp_enc_cfg_set_s32(cfg, "prep:flip", 0);
++
++    mpp_enc_cfg_set_s32(cfg, "prep:colorspace", avctx->colorspace);
++    mpp_enc_cfg_set_s32(cfg, "prep:colorprim", avctx->color_primaries);
++    mpp_enc_cfg_set_s32(cfg, "prep:colortrc", avctx->color_trc);
++
++    mpp_enc_cfg_set_s32(cfg, "prep:colorrange", avctx->color_range);
++    if (r->pix_fmt == AV_PIX_FMT_YUVJ420P ||
++        r->pix_fmt == AV_PIX_FMT_YUVJ422P ||
++        r->pix_fmt == AV_PIX_FMT_YUVJ444P) {
++        mpp_enc_cfg_set_s32(cfg, "prep:colorrange", AVCOL_RANGE_JPEG);
++    }
 +
 +    if (avctx->framerate.den > 0 && avctx->framerate.num > 0)
 +        av_reduce(&fps_num, &fps_den, avctx->framerate.num, avctx->framerate.den, 65535);

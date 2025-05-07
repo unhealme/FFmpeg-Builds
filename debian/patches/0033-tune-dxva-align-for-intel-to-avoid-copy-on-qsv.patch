@@ -19,9 +19,12 @@ Index: FFmpeg/libavcodec/dxva2.c
      /* 1 base work surface */
      num_surfaces = 1;
  
-@@ -625,7 +635,7 @@ int ff_dxva2_common_frame_params(AVCodec
+@@ -623,9 +633,9 @@ int ff_dxva2_common_frame_params(AVCodec
+     if (avctx->codec_id == AV_CODEC_ID_H264 || avctx->codec_id == AV_CODEC_ID_HEVC)
+         num_surfaces += 16;
      else if (avctx->codec_id == AV_CODEC_ID_VP9 || avctx->codec_id == AV_CODEC_ID_AV1)
-         num_surfaces += 8;
+-        num_surfaces += 8;
++        num_surfaces += 8 + 4; /* 4 base work surface in vpp async */
      else
 -        num_surfaces += 2;
 +        num_surfaces += 2 + 4; /* 4 base work surface in vpp async */
