@@ -94,7 +94,7 @@ Index: FFmpeg/libavfilter/aarch64/vf_tonemapx_intrin_neon.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/aarch64/vf_tonemapx_intrin_neon.c
-@@ -0,0 +1,2366 @@
+@@ -0,0 +1,2360 @@
 +/*
 + * Copyright (c) 2024 Gnattu OC <gnattuoc@me.com>
 + *
@@ -122,12 +122,6 @@ Index: FFmpeg/libavfilter/aarch64/vf_tonemapx_intrin_neon.c
 +#endif // ENABLE_TONEMAPX_NEON_INTRINSICS
 +
 +#ifdef ENABLE_TONEMAPX_NEON_INTRINSICS
-+inline static float32x4_t mix_float32x4(float32x4_t x, float32x4_t y, float32x4_t a)
-+{
-+    float32x4_t n = vsubq_f32(y, x);
-+    n = vfmaq_f32(x, n, a);
-+    return n;
-+}
 +
 +static inline float reshape_poly(float s, float32x4_t coeffs)
 +{
@@ -241,13 +235,13 @@ Index: FFmpeg/libavfilter/aarch64/vf_tonemapx_intrin_neon.c
 +    s = vgetq_lane_f32(sig, 0);
 +    result = sig;
 +    if (dovi_num_pivots_i > 2) {
-+        float32x4_t m01 = mix_float32x4(vld1q_f32(dovi_coeffs_i), vld1q_f32(dovi_coeffs_i + 4), vdupq_n_f32(s >= dovi_pivots_i[0]));
-+        float32x4_t m23 = mix_float32x4(vld1q_f32(dovi_coeffs_i + 2*4), vld1q_f32(dovi_coeffs_i + 3*4), vdupq_n_f32(s >= dovi_pivots_i[2]));
-+        float32x4_t m0123 = mix_float32x4(m01, m23, vdupq_n_f32(s >= dovi_pivots_i[1]));
-+        float32x4_t m45 = mix_float32x4(vld1q_f32(dovi_coeffs_i + 4*4), vld1q_f32(dovi_coeffs_i + 5*4), vdupq_n_f32(s >= dovi_pivots_i[4]));
-+        float32x4_t m67 = mix_float32x4(vld1q_f32(dovi_coeffs_i + 6*4), vld1q_f32(dovi_coeffs_i + 7*4), vdupq_n_f32(s >= dovi_pivots_i[6]));
-+        float32x4_t m4567 = mix_float32x4(m45, m67, vdupq_n_f32(s >= dovi_pivots_i[5]));
-+        coeffs = mix_float32x4(m0123, m4567, vdupq_n_f32(s >= dovi_pivots_i[3]));
++        float32x4_t m01 = s >= dovi_pivots_i[0] ? vld1q_f32(dovi_coeffs_i + 4) : vld1q_f32(dovi_coeffs_i);
++        float32x4_t m23 = s >= dovi_pivots_i[2] ? vld1q_f32(dovi_coeffs_i + 3*4) : vld1q_f32(dovi_coeffs_i + 2*4);
++        float32x4_t m0123 = s >= dovi_pivots_i[1] ? m23 : m01;
++        float32x4_t m45 = s >= dovi_pivots_i[4] ? vld1q_f32(dovi_coeffs_i + 5*4) : vld1q_f32(dovi_coeffs_i + 4*4);
++        float32x4_t m67 = s >= dovi_pivots_i[6] ? vld1q_f32(dovi_coeffs_i + 7*4) : vld1q_f32(dovi_coeffs_i + 6*4);
++        float32x4_t m4567 = s >= dovi_pivots_i[5] ? m67 : m45;
++        coeffs = s >= dovi_pivots_i[3] ? m4567 : m0123;
 +    } else {
 +        coeffs = vld1q_f32(dovi_coeffs_i);
 +    }
@@ -2634,7 +2628,7 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemapx.c
-@@ -0,0 +1,1918 @@
+@@ -0,0 +1,1935 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -3003,39 +2997,56 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +        coeffs[3] = dovi_coeffs[0*4+3];
 +
 +        if (i == 0 && dovi_num_pivots > 2) {
-+            int t0 = s >= dovi_pivots[0], t1 = s >= dovi_pivots[1];
-+            int t2 = s >= dovi_pivots[2], t3 = s >= dovi_pivots[3];
-+            int t4 = s >= dovi_pivots[4], t5 = s >= dovi_pivots[5], t6 = s >= dovi_pivots[6];
++            const int t0 = s >= dovi_pivots[0], t1 = s >= dovi_pivots[1];
++            const int t2 = s >= dovi_pivots[2], t3 = s >= dovi_pivots[3];
++            const int t4 = s >= dovi_pivots[4], t5 = s >= dovi_pivots[5], t6 = s >= dovi_pivots[6];
 +
-+            float m01[4] = { MIX(dovi_coeffs[0*4+0], dovi_coeffs[1*4+0], t0),
-+                             MIX(dovi_coeffs[0*4+1], dovi_coeffs[1*4+1], t0),
-+                             MIX(dovi_coeffs[0*4+2], dovi_coeffs[1*4+2], t0),
-+                             MIX(dovi_coeffs[0*4+3], dovi_coeffs[1*4+3], t0) };
-+            float m23[4] = { MIX(dovi_coeffs[2*4+0], dovi_coeffs[3*4+0], t2),
-+                             MIX(dovi_coeffs[2*4+1], dovi_coeffs[3*4+1], t2),
-+                             MIX(dovi_coeffs[2*4+2], dovi_coeffs[3*4+2], t2),
-+                             MIX(dovi_coeffs[2*4+3], dovi_coeffs[3*4+3], t2) };
-+            float m0123[4] = { MIX(m01[0], m23[0], t1),
-+                               MIX(m01[1], m23[1], t1),
-+                               MIX(m01[2], m23[2], t1),
-+                               MIX(m01[3], m23[3], t1) };
-+            float m45[4] = { MIX(dovi_coeffs[4*4+0], dovi_coeffs[5*4+0], t4),
-+                             MIX(dovi_coeffs[4*4+1], dovi_coeffs[5*4+1], t4),
-+                             MIX(dovi_coeffs[4*4+2], dovi_coeffs[5*4+2], t4),
-+                             MIX(dovi_coeffs[4*4+3], dovi_coeffs[5*4+3], t4) };
-+            float m67[4] = { MIX(dovi_coeffs[6*4+0], dovi_coeffs[7*4+0], t6),
-+                             MIX(dovi_coeffs[6*4+1], dovi_coeffs[7*4+1], t6),
-+                             MIX(dovi_coeffs[6*4+2], dovi_coeffs[7*4+2], t6),
-+                             MIX(dovi_coeffs[6*4+3], dovi_coeffs[7*4+3], t6) };
-+            float m4567[4] = { MIX(m45[0], m67[0], t5),
-+                               MIX(m45[1], m67[1], t5),
-+                               MIX(m45[2], m67[2], t5),
-+                               MIX(m45[3], m67[3], t5) };
++            float m01[4] = {
++                t0 ? dovi_coeffs[1*4 + 0] : dovi_coeffs[0*4 + 0],
++                t0 ? dovi_coeffs[1*4 + 1] : dovi_coeffs[0*4 + 1],
++                t0 ? dovi_coeffs[1*4 + 2] : dovi_coeffs[0*4 + 2],
++                t0 ? dovi_coeffs[1*4 + 3] : dovi_coeffs[0*4 + 3]
++            };
 +
-+            coeffs[0] = MIX(m0123[0], m4567[0], t3);
-+            coeffs[1] = MIX(m0123[1], m4567[1], t3);
-+            coeffs[2] = MIX(m0123[2], m4567[2], t3);
-+            coeffs[3] = MIX(m0123[3], m4567[3], t3);
++            float m23[4] = {
++                t2 ? dovi_coeffs[3*4 + 0] : dovi_coeffs[2*4 + 0],
++                t2 ? dovi_coeffs[3*4 + 1] : dovi_coeffs[2*4 + 1],
++                t2 ? dovi_coeffs[3*4 + 2] : dovi_coeffs[2*4 + 2],
++                t2 ? dovi_coeffs[3*4 + 3] : dovi_coeffs[2*4 + 3]
++            };
++
++            float m0123[4] = {
++                t1 ? m23[0] : m01[0],
++                t1 ? m23[1] : m01[1],
++                t1 ? m23[2] : m01[2],
++                t1 ? m23[3] : m01[3]
++            };
++
++            float m45[4] = {
++                t4 ? dovi_coeffs[5*4 + 0] : dovi_coeffs[4*4 + 0],
++                t4 ? dovi_coeffs[5*4 + 1] : dovi_coeffs[4*4 + 1],
++                t4 ? dovi_coeffs[5*4 + 2] : dovi_coeffs[4*4 + 2],
++                t4 ? dovi_coeffs[5*4 + 3] : dovi_coeffs[4*4 + 3]
++            };
++
++            float m67[4] = {
++                t6 ? dovi_coeffs[7*4 + 0] : dovi_coeffs[6*4 + 0],
++                t6 ? dovi_coeffs[7*4 + 1] : dovi_coeffs[6*4 + 1],
++                t6 ? dovi_coeffs[7*4 + 2] : dovi_coeffs[6*4 + 2],
++                t6 ? dovi_coeffs[7*4 + 3] : dovi_coeffs[6*4 + 3]
++            };
++
++            float m4567[4] = {
++                t5 ? m67[0] : m45[0],
++                t5 ? m67[1] : m45[1],
++                t5 ? m67[2] : m45[2],
++                t5 ? m67[3] : m45[3]
++            };
++
++            coeffs[0] = t3 ? m4567[0] : m0123[0];
++            coeffs[1] = t3 ? m4567[1] : m0123[1];
++            coeffs[2] = t3 ? m4567[2] : m0123[2];
++            coeffs[3] = t3 ? m4567[3] : m0123[3];
 +        }
 +
 +        has_mmr_poly = dovi_has_mmr && dovi_has_poly;
@@ -4719,7 +4730,7 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
-@@ -0,0 +1,2584 @@
+@@ -0,0 +1,2577 @@
 +/*
 + * Copyright (c) 2024 Gnattu OC <gnattuoc@me.com>
 + *
@@ -4758,13 +4769,6 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +    __m256i xor_result = _mm256_xor_si256(shifted, _mm256_set1_epi32(0x7FFF));
 +
 +    return _mm256_or_si256(_mm256_and_si256(cmp, a), _mm256_andnot_si256(cmp, xor_result));
-+}
-+
-+X86_64_V3 inline static __m128 mix_float32x4(__m128 x, __m128 y, __m128 a)
-+{
-+    __m128 n = _mm_sub_ps(y, x);
-+    n = _mm_fmadd_ps(a, n, x);
-+    return n;
 +}
 +
 +X86_64_V3 inline static float reduce_floatx4(__m128 x) {
@@ -4884,13 +4888,13 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +    s = _mm_cvtss_f32(sig);
 +    result = sig;
 +    if (dovi_num_pivots_i > 2) {
-+        __m128 m01 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i), _mm_loadu_ps(dovi_coeffs_i + 4), _mm_set1_ps(s >= dovi_pivots_i[0]));
-+        __m128 m23 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i + 2*4), _mm_loadu_ps(dovi_coeffs_i + 3*4), _mm_set1_ps(s >= dovi_pivots_i[2]));
-+        __m128 m0123 = mix_float32x4(m01, m23, _mm_set1_ps(s >= dovi_pivots_i[1]));
-+        __m128 m45 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i + 4*4), _mm_loadu_ps(dovi_coeffs_i + 5*4), _mm_set1_ps(s >= dovi_pivots_i[4]));
-+        __m128 m67 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i + 6*4), _mm_loadu_ps(dovi_coeffs_i + 7*4), _mm_set1_ps(s >= dovi_pivots_i[6]));
-+        __m128 m4567 = mix_float32x4(m45, m67, _mm_set1_ps(s >= dovi_pivots_i[5]));
-+        coeffs = mix_float32x4(m0123, m4567, _mm_set1_ps(s >= dovi_pivots_i[3]));
++        __m128 m01 = s >= dovi_pivots_i[0] ? _mm_loadu_ps(dovi_coeffs_i + 4) : _mm_loadu_ps(dovi_coeffs_i);
++        __m128 m23 = s >= dovi_pivots_i[2] ? _mm_loadu_ps(dovi_coeffs_i + 3*4) : _mm_loadu_ps(dovi_coeffs_i + 2*4);
++        __m128 m0123 = s >= dovi_pivots_i[1] ? m23 : m01;
++        __m128 m45 = s >= dovi_pivots_i[4] ? _mm_loadu_ps(dovi_coeffs_i + 5*4) : _mm_loadu_ps(dovi_coeffs_i + 4*4);
++        __m128 m67 = s >= dovi_pivots_i[6] ? _mm_loadu_ps(dovi_coeffs_i + 7*4) : _mm_loadu_ps(dovi_coeffs_i + 6*4);
++        __m128 m4567 = s >= dovi_pivots_i[5] ? m67 : m45;
++        coeffs = s >= dovi_pivots_i[3] ? m4567 : m0123;
 +    } else {
 +        coeffs = _mm_loadu_ps(dovi_coeffs_i);
 +    }
@@ -4976,11 +4980,11 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +                                          __m256 yx8, __m256 ux8, __m256 vx8,
 +                                          const struct TonemapIntParams *params)
 +{
-+    __m128 yx4a = _mm256_extractf128_ps(yx8, 0);
++    __m128 yx4a = _mm256_castps256_ps128(yx8);
 +    __m128 yx4b = _mm256_extractf128_ps(yx8, 1);
-+    __m128 ux4a = _mm256_extractf128_ps(ux8, 0);
++    __m128 ux4a = _mm256_castps256_ps128(ux8);
 +    __m128 ux4b = _mm256_extractf128_ps(ux8, 1);
-+    __m128 vx4a = _mm256_extractf128_ps(vx8, 0);
++    __m128 vx4a = _mm256_castps256_ps128(vx8);
 +    __m128 vx4b = _mm256_extractf128_ps(vx8, 1);
 +
 +    __m128 ia1 = _mm_unpacklo_ps(yx4a, ux4a);
@@ -5227,9 +5231,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            ux8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcu + (x >> 1))));
 +            vx8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcv + (x >> 1))));
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
 +
 +            ux8a = _mm256_permutevar8x32_epi32(ux8, _mm256_set_epi32(3, 3, 2, 2, 1, 1, 0, 0));
@@ -5368,9 +5372,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g0ox16 = _mm256_lddqu_si256((const __m256i_u *)g);
 +            b0ox16 = _mm256_lddqu_si256((const __m256i_u *)b);
 +
-+            roax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 0));
-+            goax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 0));
-+            boax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b0ox16, 0));
++            roax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r0ox16));
++            goax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g0ox16));
++            boax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b0ox16));
 +
 +            robx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 1));
 +            gobx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 1));
@@ -5398,9 +5402,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g1ox16 = _mm256_lddqu_si256((const __m256i_u *)g1);
 +            b1ox16 = _mm256_lddqu_si256((const __m256i_u *)b1);
 +
-+            r1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 0));
-+            g1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 0));
-+            b1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b1ox16, 0));
++            r1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r1ox16));
++            g1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g1ox16));
++            b1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b1ox16));
 +
 +            r1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 1));
 +            g1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 1));
@@ -5554,9 +5558,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            ux8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcu + (x >> 1))));
 +            vx8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcv + (x >> 1))));
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
 +
 +            ux8a = _mm256_permutevar8x32_epi32(ux8, _mm256_set_epi32(3, 3, 2, 2, 1, 1, 0, 0));
@@ -5695,9 +5699,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g0ox16 = _mm256_lddqu_si256((const __m256i_u *)g);
 +            b0ox16 = _mm256_lddqu_si256((const __m256i_u *)b);
 +
-+            roax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 0));
-+            goax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 0));
-+            boax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b0ox16, 0));
++            roax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r0ox16));
++            goax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g0ox16));
++            boax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b0ox16));
 +
 +            robx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 1));
 +            gobx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 1));
@@ -5725,9 +5729,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g1ox16 = _mm256_lddqu_si256((const __m256i_u *)g1);
 +            b1ox16 = _mm256_lddqu_si256((const __m256i_u *)b1);
 +
-+            r1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 0));
-+            g1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 0));
-+            b1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b1ox16, 0));
++            r1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r1ox16));
++            g1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g1ox16));
++            b1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b1ox16));
 +
 +            r1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 1));
 +            g1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 1));
@@ -5874,9 +5878,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            ux8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcu + (x >> 1))));
 +            vx8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcv + (x >> 1))));
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
 +
 +            ux8a = _mm256_permutevar8x32_epi32(ux8, _mm256_set_epi32(3, 3, 2, 2, 1, 1, 0, 0));
@@ -6180,9 +6184,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            ux8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcu + (x >> 1))));
 +            vx8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcv + (x >> 1))));
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
 +
 +            y0x8a = _mm256_sub_epi32(y0x8a, in_yuv_offx8);
@@ -6289,9 +6293,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g0ox16 = _mm256_lddqu_si256((const __m256i_u *)g);
 +            b0ox16 = _mm256_lddqu_si256((const __m256i_u *)b);
 +
-+            roax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 0));
-+            goax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 0));
-+            boax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b0ox16, 0));
++            roax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r0ox16));
++            goax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g0ox16));
++            boax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b0ox16));
 +
 +            robx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 1));
 +            gobx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 1));
@@ -6319,9 +6323,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g1ox16 = _mm256_lddqu_si256((const __m256i_u *)g1);
 +            b1ox16 = _mm256_lddqu_si256((const __m256i_u *)b1);
 +
-+            r1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 0));
-+            g1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 0));
-+            b1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b1ox16, 0));
++            r1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r1ox16));
++            g1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g1ox16));
++            b1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b1ox16));
 +
 +            r1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 1));
 +            g1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 1));
@@ -6480,9 +6484,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            ux8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcu + (x >> 1))));
 +            vx8 = _mm256_cvtepi16_epi32(_mm_lddqu_si128((__m128i_u *)(srcv + (x >> 1))));
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
 +
 +            y0x8a = _mm256_sub_epi32(y0x8a, in_yuv_offx8);
@@ -6589,9 +6593,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g0ox16 = _mm256_lddqu_si256((const __m256i_u *)g);
 +            b0ox16 = _mm256_lddqu_si256((const __m256i_u *)b);
 +
-+            roax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 0));
-+            goax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 0));
-+            boax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b0ox16, 0));
++            roax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r0ox16));
++            goax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g0ox16));
++            boax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b0ox16));
 +
 +            robx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 1));
 +            gobx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 1));
@@ -6619,9 +6623,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g1ox16 = _mm256_lddqu_si256((const __m256i_u *)g1);
 +            b1ox16 = _mm256_lddqu_si256((const __m256i_u *)b1);
 +
-+            r1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 0));
-+            g1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 0));
-+            b1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b1ox16, 0));
++            r1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r1ox16));
++            g1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g1ox16));
++            b1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b1ox16));
 +
 +            r1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 1));
 +            g1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 1));
@@ -6781,11 +6785,11 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            y1x16 = _mm256_srli_epi16(y1x16, TEN_BIT_BIPLANAR_SHIFT);
 +            uvx16 = _mm256_srli_epi16(uvx16, TEN_BIT_BIPLANAR_SHIFT);
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
-+            uvx8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(uvx16, 0));
++            uvx8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(uvx16));
 +            uvx8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(uvx16, 1));
 +            y0x8a = _mm256_sub_epi32(y0x8a, in_yuv_offx8);
 +            y1x8a = _mm256_sub_epi32(y1x8a, in_yuv_offx8);
@@ -6891,9 +6895,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g0ox16 = _mm256_lddqu_si256((const __m256i_u *)g);
 +            b0ox16 = _mm256_lddqu_si256((const __m256i_u *)b);
 +
-+            roax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 0));
-+            goax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 0));
-+            boax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b0ox16, 0));
++            roax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r0ox16));
++            goax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g0ox16));
++            boax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b0ox16));
 +
 +            robx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 1));
 +            gobx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 1));
@@ -6921,9 +6925,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g1ox16 = _mm256_lddqu_si256((const __m256i_u *)g1);
 +            b1ox16 = _mm256_lddqu_si256((const __m256i_u *)b1);
 +
-+            r1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 0));
-+            g1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 0));
-+            b1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b1ox16, 0));
++            r1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r1ox16));
++            g1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g1ox16));
++            b1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b1ox16));
 +
 +            r1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 1));
 +            g1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 1));
@@ -7080,11 +7084,11 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            y1x16 = _mm256_srli_epi16(y1x16, TEN_BIT_BIPLANAR_SHIFT);
 +            uvx16 = _mm256_srli_epi16(uvx16, TEN_BIT_BIPLANAR_SHIFT);
 +
-+            y0x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 0));
++            y0x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y0x16));
 +            y0x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y0x16, 1));
-+            y1x8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 0));
++            y1x8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(y1x16));
 +            y1x8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(y1x16, 1));
-+            uvx8a = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(uvx16, 0));
++            uvx8a = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(uvx16));
 +            uvx8b = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(uvx16, 1));
 +            y0x8a = _mm256_sub_epi32(y0x8a, in_yuv_offx8);
 +            y1x8a = _mm256_sub_epi32(y1x8a, in_yuv_offx8);
@@ -7190,9 +7194,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g0ox16 = _mm256_lddqu_si256((const __m256i_u *)g);
 +            b0ox16 = _mm256_lddqu_si256((const __m256i_u *)b);
 +
-+            roax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 0));
-+            goax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 0));
-+            boax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b0ox16, 0));
++            roax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r0ox16));
++            goax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g0ox16));
++            boax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b0ox16));
 +
 +            robx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r0ox16, 1));
 +            gobx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g0ox16, 1));
@@ -7222,9 +7226,9 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_avx.c
 +            g1ox16 = _mm256_lddqu_si256((const __m256i_u *)g1);
 +            b1ox16 = _mm256_lddqu_si256((const __m256i_u *)b1);
 +
-+            r1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 0));
-+            g1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 0));
-+            b1oax8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b1ox16, 0));
++            r1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(r1ox16));
++            g1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(g1ox16));
++            b1oax8 = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b1ox16));
 +
 +            r1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(r1ox16, 1));
 +            g1obx8 = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(g1ox16, 1));
@@ -7581,13 +7585,13 @@ Index: FFmpeg/libavfilter/x86/vf_tonemapx_intrin_sse.c
 +    s = _mm_cvtss_f32(sig);
 +    result = sig;
 +    if (dovi_num_pivots_i > 2) {
-+        __m128 m01 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i), _mm_loadu_ps(dovi_coeffs_i + 4), _mm_set1_ps(s >= dovi_pivots_i[0]));
-+        __m128 m23 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i + 2*4), _mm_loadu_ps(dovi_coeffs_i + 3*4), _mm_set1_ps(s >= dovi_pivots_i[2]));
-+        __m128 m0123 = mix_float32x4(m01, m23, _mm_set1_ps(s >= dovi_pivots_i[1]));
-+        __m128 m45 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i + 4*4), _mm_loadu_ps(dovi_coeffs_i + 5*4), _mm_set1_ps(s >= dovi_pivots_i[4]));
-+        __m128 m67 = mix_float32x4(_mm_loadu_ps(dovi_coeffs_i + 6*4), _mm_loadu_ps(dovi_coeffs_i + 7*4), _mm_set1_ps(s >= dovi_pivots_i[6]));
-+        __m128 m4567 = mix_float32x4(m45, m67, _mm_set1_ps(s >= dovi_pivots_i[5]));
-+        coeffs = mix_float32x4(m0123, m4567, _mm_set1_ps(s >= dovi_pivots_i[3]));
++        __m128 m01 = s >= dovi_pivots_i[0] ? _mm_loadu_ps(dovi_coeffs_i + 4) : _mm_loadu_ps(dovi_coeffs_i);
++        __m128 m23 = s >= dovi_pivots_i[2] ? _mm_loadu_ps(dovi_coeffs_i + 3*4) : _mm_loadu_ps(dovi_coeffs_i + 2*4);
++        __m128 m0123 = s >= dovi_pivots_i[1] ? m23 : m01;
++        __m128 m45 = s >= dovi_pivots_i[4] ? _mm_loadu_ps(dovi_coeffs_i + 5*4) : _mm_loadu_ps(dovi_coeffs_i + 4*4);
++        __m128 m67 = s >= dovi_pivots_i[6] ? _mm_loadu_ps(dovi_coeffs_i + 7*4) : _mm_loadu_ps(dovi_coeffs_i + 6*4);
++        __m128 m4567 = s >= dovi_pivots_i[5] ? m67 : m45;
++        coeffs = s >= dovi_pivots_i[3] ? m4567 : m0123;
 +    } else {
 +        coeffs = _mm_loadu_ps(dovi_coeffs_i);
 +    }
