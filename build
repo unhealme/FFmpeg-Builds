@@ -5,8 +5,8 @@ usage() {
     echo -e " $0 <release> <arch>"
     echo -e "Releases:          Arches:"
     echo -e " * bullseye         * amd64"
-    echo -e " * bookworm         * armhf"
-    echo -e " * focal            * arm64"
+    echo -e " * bookworm         * arm64"
+    echo -e " * focal"
     echo -e " * jammy"
     echo -e " * noble"
 }
@@ -59,9 +59,6 @@ cli_arch="${2}"
 case ${cli_arch} in
     'amd64')
         arch="amd64"
-    ;;
-    'armhf')
-        arch="armhf"
     ;;
     'arm64')
         arch="arm64"
