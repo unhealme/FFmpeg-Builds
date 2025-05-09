@@ -376,7 +376,7 @@ prepare_extra_amd64() {
 
     # GMMLIB
     pushd ${SOURCE_DIR}
-    git clone -b intel-gmmlib-22.7.1 --depth=1 https://github.com/intel/gmmlib.git
+    git clone -b intel-gmmlib-22.7.2 --depth=1 https://github.com/intel/gmmlib.git
     pushd gmmlib
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} ..
@@ -562,6 +562,8 @@ prepare_extra_amd64() {
         tar xaf mesa.tar.gz
         # Cherry-pick fixes targeting mesa-stable
         wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/ee4d7e98.patch | git -C mesa-${mesa_ver} apply
+        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/8aadce68.patch | git -C mesa-${mesa_ver} apply
+        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/cb9ae704.patch | git -C mesa-${mesa_ver} apply
         meson setup mesa-${mesa_ver} mesa_build \
             --prefix=${TARGET_DIR} \
             --libdir=lib \
