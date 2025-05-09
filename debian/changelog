@@ -7,6 +7,10 @@ jellyfin-ffmpeg (7.1.1-3) unstable; urgency=medium
   * Increase default frame pool size for D3D11VA AV1/VP9
   * Handle NOPTS and no extradata in RKMPP decoders
   * Defer DX11 to OCL mapping for low startup latency
+  * avfilter/tonemapx: use cpu friendly conditional assignments
+  * Remove all armhf build configs
+  * ffprobe: always use ifile->nb_streams for first vframe option
+  * Add intel-opencl-icd{,-legacy} to control/Suggests
 
  -- nyanmisaka <nst799610810@gmail.com>  Tue, 6 May 2025 21:12:22 +0800
 
