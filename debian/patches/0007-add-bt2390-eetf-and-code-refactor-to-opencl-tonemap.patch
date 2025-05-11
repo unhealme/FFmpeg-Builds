@@ -610,7 +610,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +106,687 @@ float mobius(float s, float peak) {
+@@ -71,202 +106,790 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -853,10 +853,8 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    float3 c = yuv2lrgb(yuv);
 +#endif
 +    return c;
- }
- 
--float3 map_one_pixel_rgb(float3 rgb, float peak, float average) {
--    float sig = max(max(rgb.x, max(rgb.y, rgb.z)), 1e-6f);
++}
++
 +// Map from source space YUV to destination space RGB
 +float3 map_to_dst_space_from_yuv(float3 yuv) {
 +#ifdef DOVI_RESHAPE
@@ -869,6 +867,13 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    c = lrgb2lrgb(c);
 +#endif
 +    return c;
+ }
+ 
+-float3 map_one_pixel_rgb(float3 rgb, float peak, float average) {
+-    float sig = max(max(rgb.x, max(rgb.y, rgb.z)), 1e-6f);
++#ifdef DOVI_RESHAPE
++vec4 reshape_polyx4(vec4 s, vec4 coeffsx, vec4 coeffsy, vec4 coeffsz) {
++    return (coeffsz * s + coeffsy) * s + coeffsx;
 +}
  
 -    // Rescale the variables in order to bring it into a representation where
@@ -877,13 +882,6 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 -    if (target_peak > 1.0f) {
 -        sig *= 1.0f / target_peak;
 -        peak *= 1.0f / target_peak;
--    }
-+#ifdef DOVI_RESHAPE
-+vec reshape_poly(vec s, vec4 coeffs) {
-+    return (coeffs.z * s + coeffs.y) * s + coeffs.x;
-+}
- 
--    float sig_old = sig;
 +vec reshape_mmr(vec3 sig,
 +                vec4 coeffs,
 +                __global const vec4 *dovi_mmr,
@@ -913,8 +911,10 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +            s += dot(dovi_mmr[mmr_idx + 4].xyz, sig2 * sig);
 +            s += dot(dovi_mmr[mmr_idx + 5], sigX2 * sigX);
 +        }
-+    }
+     }
  
+-    float sig_old = sig;
+-
 -    // Scale the signal to compensate for differences in the average brightness
 -    float slope = min(1.0f, sdr_avg / average);
 -    sig *= slope;
@@ -929,26 +929,63 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 -        coeff = native_powr(coeff, 10.0f / desat_param);
 -        rgb = mix(rgb, (float3)luma, (float3)coeff);
 -        sig = mix(sig, luma * slope, coeff);
-+void reshape_dovi_yuv(float3 *yuv,
-+                      __global const vec *src_dovi_params,
-+                      __global const vec *src_dovi_pivots,
-+                      __global const vec4 *src_dovi_coeffs,
-+                      __global const vec4 *src_dovi_mmr)
++vec4 reshape_mmrx4(vec4 sig_i4,
++                   vec4 sig_p4,
++                   vec4 sig_t4,
++                   vec4 coeffsx,
++                   vec4 coeffsy,
++                   vec4 coeffsz,
++                   vec4 coeffsw,
++                   __global const vec4 *dovi_mmr,
++                   uchar dovi_mmr_single,
++                   uchar dovi_min_order,
++                   uchar dovi_max_order)
 +{
-+    bool t, has_mmr_poly;
-+  #ifdef DOVI_PERF_FP16
-+    vec3 sig = convert_half3(clamp((*yuv).xyz, 0.0f, 1.0f));
-+  #else
-+    vec3 sig = clamp((*yuv).xyz, 0.0f, 1.0f);
-+  #endif
-+    vec s;
-+    vec4 coeffs;
++    vec4 coeffs = (vec4)(coeffsx.x, coeffsy.x, coeffsz.x, coeffsw.x);
++    vec4 result = (vec4)M_ZERO_VEC;
++    result.x = reshape_mmr((vec3)(sig_i4.x, sig_p4.x, sig_t4.x), coeffs, dovi_mmr,
++                           dovi_mmr_single, dovi_min_order, dovi_max_order);
++    coeffs = (vec4)(coeffsx.y, coeffsy.y, coeffsz.y, coeffsw.y);
++    result.y = reshape_mmr((vec3)(sig_i4.y, sig_p4.y, sig_t4.y), coeffs, dovi_mmr,
++                           dovi_mmr_single, dovi_min_order, dovi_max_order);
++    coeffs = (vec4)(coeffsx.z, coeffsy.z, coeffsz.z, coeffsw.z);
++    result.z = reshape_mmr((vec3)(sig_i4.z, sig_p4.z, sig_t4.z), coeffs, dovi_mmr,
++                           dovi_mmr_single, dovi_min_order, dovi_max_order);
++    coeffs = (vec4)(coeffsx.w, coeffsy.w, coeffsz.w, coeffsw.w);
++    result.w = reshape_mmr((vec3)(sig_i4.w, sig_p4.w, sig_t4.w), coeffs, dovi_mmr,
++                           dovi_mmr_single, dovi_min_order, dovi_max_order);
++    return result;
++}
++
++void reshape_dovi_iptx4(float3 *ipt0,
++                        float3 *ipt1,
++                        float3 *ipt2,
++                        float3 *ipt3,
++                        __global const vec *src_dovi_params,
++                        __global const vec *src_dovi_pivots,
++                        __global const vec4 *src_dovi_coeffs,
++                        __global const vec4 *src_dovi_mmr)
++{
++    bool has_mmr_poly, t;
++    vec4 do_poly, coeffw_is_zero;
++    vec4 coeffs, coeffsx, coeffsy, coeffsz, coeffsw, sx4;
++    float4 result;
 +    uchar dovi_num_pivots, dovi_has_mmr, dovi_has_poly;
 +    uchar dovi_mmr_single, dovi_min_order, dovi_max_order;
-+    vec dovi_lo, dovi_hi;
 +    __global const vec *dovi_params;
 +    __global const vec *dovi_pivots;
 +    __global const vec4 *dovi_coeffs, *dovi_mmr;
++    vec dovi_lo, dovi_hi;
++
++  #ifdef DOVI_PERF_FP16
++    vec4 sig_i4 = convert_half4(clamp((vec4)((*ipt0).x,(*ipt1).x,(*ipt2).x,(*ipt3).x), 0.0f, 1.0f));
++    vec4 sig_p4 = convert_half4(clamp((vec4)((*ipt0).y,(*ipt1).y,(*ipt2).y,(*ipt3).y), 0.0f, 1.0f));
++    vec4 sig_t4 = convert_half4(clamp((vec4)((*ipt0).z,(*ipt1).z,(*ipt2).z,(*ipt3).z), 0.0f, 1.0f));
++  #else
++    vec4 sig_i4 = clamp((vec4)((*ipt0).x,(*ipt1).x,(*ipt2).x,(*ipt3).x), 0.0f, 1.0f);
++    vec4 sig_p4 = clamp((vec4)((*ipt0).y,(*ipt1).y,(*ipt2).y,(*ipt3).y), 0.0f, 1.0f);
++    vec4 sig_t4 = clamp((vec4)((*ipt0).z,(*ipt1).z,(*ipt2).z,(*ipt3).z), 0.0f, 1.0f);
++  #endif
 +
 +    // Reshape I
 +    dovi_params = src_dovi_params;
@@ -964,8 +1001,11 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    dovi_lo = dovi_params[6];
 +    dovi_hi = dovi_params[7];
 +
-+    s = sig.x;
 +    coeffs = dovi_coeffs[0];
++    coeffsx = (vec4)coeffs.x;
++    coeffsy = (vec4)coeffs.y;
++    coeffsz = (vec4)coeffs.z;
++    coeffsw = (vec4)coeffs.w;
 +
 +    if (dovi_num_pivots > 2) {
 +  #ifdef DOVI_PERF_FP16
@@ -983,19 +1023,57 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +        const vec8 coeffs2 = (vec8)(dovi_coeffs[4], dovi_coeffs[5]);
 +        const vec8 coeffs3 = (vec8)(dovi_coeffs[6], dovi_coeffs[7]);
 +  #endif
-+        coeffs = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(s >= pivots[0])),
-+                         mix(coeffs1.lo, coeffs1.hi, (vec4)(s >= pivots[2])),
-+                         (vec4)(s >= pivots[1])),
-+                     mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(s >= pivots[4])),
-+                         mix(coeffs3.lo, coeffs3.hi, (vec4)(s >= pivots[6])),
-+                         (vec4)(s >= pivots[5])),
-+                     (vec4)(s >= pivots[3]));
++        vec4 coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.x >= pivots[0])),
++                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.x >= pivots[2])),
++                               (vec4)(sig_i4.x >= pivots[1])),
++                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.x >= pivots[4])),
++                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.x >= pivots[6])),
++                               (vec4)(sig_i4.x >= pivots[5])),
++                           (vec4)(sig_i4.x >= pivots[3]));
++        coeffsx.x = coeffs_temp.x;
++        coeffsy.x = coeffs_temp.y;
++        coeffsz.x = coeffs_temp.z;
++        coeffsw.x = coeffs_temp.w;
++
++        coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.y >= pivots[0])),
++                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.y >= pivots[2])),
++                               (vec4)(sig_i4.y >= pivots[1])),
++                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.y >= pivots[4])),
++                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.y >= pivots[6])),
++                               (vec4)(sig_i4.y >= pivots[5])),
++                           (vec4)(sig_i4.y >= pivots[3]));
++        coeffsx.y = coeffs_temp.x;
++        coeffsy.y = coeffs_temp.y;
++        coeffsz.y = coeffs_temp.z;
++        coeffsw.y = coeffs_temp.w;
++
++        coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.z >= pivots[0])),
++                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.z >= pivots[2])),
++                               (vec4)(sig_i4.z >= pivots[1])),
++                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.z >= pivots[4])),
++                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.z >= pivots[6])),
++                               (vec4)(sig_i4.z >= pivots[5])),
++                           (vec4)(sig_i4.z >= pivots[3]));
++        coeffsx.z = coeffs_temp.x;
++        coeffsy.z = coeffs_temp.y;
++        coeffsz.z = coeffs_temp.z;
++        coeffsw.z = coeffs_temp.w;
++
++        coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.w >= pivots[0])),
++                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.w >= pivots[2])),
++                               (vec4)(sig_i4.w >= pivots[1])),
++                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.w >= pivots[4])),
++                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.w >= pivots[6])),
++                               (vec4)(sig_i4.w >= pivots[5])),
++                           (vec4)(sig_i4.w >= pivots[3]));
++        coeffsx.w = coeffs_temp.x;
++        coeffsy.w = coeffs_temp.y;
++        coeffsz.w = coeffs_temp.z;
++        coeffsw.w = coeffs_temp.w;
      }
  
 -    sig = TONE_FUNC(sig, peak);
-+    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
-+    t = (has_mmr_poly && coeffs.w == M_ZERO_VEC) || (!has_mmr_poly && dovi_has_poly);
- 
+-
 -    sig = min(sig, 1.0f);
 -    rgb *= (sig/sig_old);
 -    return rgb;
@@ -1007,14 +1085,30 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 -    c = lrgb2lrgb(c);
 -    return c;
 -}
-+    s = t ? reshape_poly(s, coeffs)
-+          : reshape_mmr(sig, coeffs, dovi_mmr,
-+                        dovi_mmr_single, dovi_min_order, dovi_max_order);
++    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
++    #ifdef DOVI_PERF_FP16
++      coeffw_is_zero = convert_half4(coeffsw == (vec4)M_ZERO_VEC);
++    #else
++      coeffw_is_zero = coeffsw == (vec4)M_ZERO_VEC;
++    #endif
++    do_poly = has_mmr_poly
++              ? coeffw_is_zero
++              : (vec4)(dovi_has_poly != M_ZERO_VEC);
++
++    sx4 = mix(reshape_mmrx4(sig_i4, sig_p4, sig_t4,
++                            coeffsx, coeffsy, coeffsz, coeffsw, dovi_mmr,
++                            dovi_mmr_single, dovi_min_order, dovi_max_order),
++                 reshape_polyx4(sig_i4, coeffsx, coeffsy, coeffsz),
++                 do_poly);
 +  #ifdef DOVI_PERF_FP16
-+    (*yuv).x = convert_float(clamp(s, dovi_lo, dovi_hi));
++    result = convert_float4(clamp(sx4, dovi_lo, dovi_hi));
 +  #else
-+    (*yuv).x = clamp(s, dovi_lo, dovi_hi);
++    result = clamp(sx4, dovi_lo, dovi_hi);
 +  #endif
++    (*ipt0).x = result.x;
++    (*ipt1).x = result.y;
++    (*ipt2).x = result.z;
++    (*ipt3).x = result.w;
 +
 +    // Reshape P
 +    dovi_params = src_dovi_params + 1*8;
@@ -1030,20 +1124,28 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    dovi_lo = dovi_params[6];
 +    dovi_hi = dovi_params[7];
 +
-+    s = sig.y;
 +    coeffs = dovi_coeffs[0];
++    coeffsx = (vec4)coeffs.x;
++    coeffsy = (vec4)coeffs.y;
++    coeffsz = (vec4)coeffs.z;
++    coeffsw = (vec4)coeffs.w;
 +
 +    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
-+    t = (has_mmr_poly && coeffs.w == M_ZERO_VEC) || (!has_mmr_poly && dovi_has_poly);
++    t = has_mmr_poly ? coeffs.w == M_ZERO_VEC : dovi_has_poly != M_ZERO_VEC;
 +
-+    s = t ? reshape_poly(s, coeffs)
-+          : reshape_mmr(sig, coeffs, dovi_mmr,
-+                        dovi_mmr_single, dovi_min_order, dovi_max_order);
-+  #ifdef DOVI_PERF_FP16
-+    (*yuv).y = convert_float(clamp(s, dovi_lo, dovi_hi));
-+  #else
-+    (*yuv).y = clamp(s, dovi_lo, dovi_hi);
-+  #endif
++    sx4 = t ? reshape_polyx4(sig_p4, coeffsx, coeffsy, coeffsz)
++            : reshape_mmrx4(sig_i4, sig_p4, sig_t4,
++                            coeffsx, coeffsy, coeffsz, coeffsw, dovi_mmr,
++                            dovi_mmr_single, dovi_min_order, dovi_max_order);
++#ifdef DOVI_PERF_FP16
++    result = convert_float4(clamp(sx4, dovi_lo, dovi_hi));
++#else
++    result = clamp(sx4, dovi_lo, dovi_hi);
++#endif
++    (*ipt0).y = result.x;
++    (*ipt1).y = result.y;
++    (*ipt2).y = result.z;
++    (*ipt3).y = result.w;
 +
 +    // Reshape T
 +    dovi_params = src_dovi_params + 2*8;
@@ -1059,20 +1161,28 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    dovi_lo = dovi_params[6];
 +    dovi_hi = dovi_params[7];
 +
-+    s = sig.z;
 +    coeffs = dovi_coeffs[0];
++    coeffsx = (vec4)coeffs.x;
++    coeffsy = (vec4)coeffs.y;
++    coeffsz = (vec4)coeffs.z;
++    coeffsw = (vec4)coeffs.w;
 +
 +    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
-+    t = (has_mmr_poly && coeffs.w == M_ZERO_VEC) || (!has_mmr_poly && dovi_has_poly);
++    t = has_mmr_poly ? coeffs.w == M_ZERO_VEC : dovi_has_poly != M_ZERO_VEC;
 +
-+    s = t ? reshape_poly(s, coeffs)
-+          : reshape_mmr(sig, coeffs, dovi_mmr,
-+                        dovi_mmr_single, dovi_min_order, dovi_max_order);
++    sx4 = t ? reshape_polyx4(sig_t4, coeffsx, coeffsy, coeffsz)
++            : reshape_mmrx4(sig_i4, sig_p4, sig_t4,
++                            coeffsx, coeffsy, coeffsz, coeffsw, dovi_mmr,
++                            dovi_mmr_single, dovi_min_order, dovi_max_order);
 +  #ifdef DOVI_PERF_FP16
-+    (*yuv).z = convert_float(clamp(s, dovi_lo, dovi_hi));
++    result = convert_float4(clamp(sx4, dovi_lo, dovi_hi));
 +  #else
-+    (*yuv).z = clamp(s, dovi_lo, dovi_hi);
++    result = clamp(sx4, dovi_lo, dovi_hi);
 +  #endif
++    (*ipt0).z = result.x;
++    (*ipt1).z = result.y;
++    (*ipt2).z = result.z;
++    (*ipt3).z = result.w;
 +}
 +#endif
 +
@@ -1161,10 +1271,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    __global const vec *dovi_pivots = dovi_buf + 24;
 +    __global const vec4 *dovi_coeffs = (__global const vec4 *)(dovi_buf + 48);
 +    __global const vec4 *dovi_mmr = (__global const vec4 *)(dovi_buf + 144);
-+    reshape_dovi_yuv(&yuv0, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
-+    reshape_dovi_yuv(&yuv1, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
-+    reshape_dovi_yuv(&yuv2, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
-+    reshape_dovi_yuv(&yuv3, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
++    reshape_dovi_iptx4(&yuv0, &yuv1, &yuv2, &yuv3, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
 +#endif
 +
 +    float3 c0, c1, c2, c3;
@@ -1400,10 +1507,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    __global const vec *dovi_pivots = dovi_buf + 24;
 +    __global const vec4 *dovi_coeffs = (__global const vec4 *)(dovi_buf + 48);
 +    __global const vec4 *dovi_mmr = (__global const vec4 *)(dovi_buf + 144);
-+    reshape_dovi_yuv(&yuv0, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
-+    reshape_dovi_yuv(&yuv1, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
-+    reshape_dovi_yuv(&yuv2, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
-+    reshape_dovi_yuv(&yuv3, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
++    reshape_dovi_iptx4(&yuv0, &yuv1, &yuv2, &yuv3, dovi_params, dovi_pivots, dovi_coeffs, dovi_mmr);
 +#endif
 +
 +    float3 c0, c1, c2, c3;
