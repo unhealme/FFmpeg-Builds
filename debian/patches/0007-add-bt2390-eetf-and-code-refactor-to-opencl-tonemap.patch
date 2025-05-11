@@ -610,7 +610,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      float j = tone_param;
      float a, b;
  
-@@ -71,202 +106,790 @@ float mobius(float s, float peak) {
+@@ -71,202 +106,755 @@ float mobius(float s, float peak) {
          return s;
  
      a = -j * j * (peak - 1.0f) / (j * j - 2.0f * j + peak);
@@ -914,21 +914,13 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
      }
  
 -    float sig_old = sig;
--
++    return s;
++}
+ 
 -    // Scale the signal to compensate for differences in the average brightness
 -    float slope = min(1.0f, sdr_avg / average);
 -    sig *= slope;
 -    peak *= slope;
-+    return s;
-+}
- 
--    // Desaturate the color using a coefficient dependent on the signal level
--    if (desat_param > 0.0f) {
--        float luma = get_luma_dst(rgb);
--        float coeff = max(sig - 0.18f, 1e-6f) / max(sig, 1e-6f);
--        coeff = native_powr(coeff, 10.0f / desat_param);
--        rgb = mix(rgb, (float3)luma, (float3)coeff);
--        sig = mix(sig, luma * slope, coeff);
 +vec4 reshape_mmrx4(vec4 sig_i4,
 +                   vec4 sig_p4,
 +                   vec4 sig_t4,
@@ -987,28 +979,33 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    vec4 sig_t4 = clamp((vec4)((*ipt0).z,(*ipt1).z,(*ipt2).z,(*ipt3).z), 0.0f, 1.0f);
 +  #endif
 +
-+    // Reshape I
-+    dovi_params = src_dovi_params;
-+    dovi_pivots = src_dovi_pivots;
-+    dovi_coeffs = src_dovi_coeffs;
-+    dovi_mmr = src_dovi_mmr;
-+    dovi_num_pivots = dovi_params[0];
-+    dovi_has_mmr = dovi_params[1];
-+    dovi_has_poly = dovi_params[2];
-+    dovi_mmr_single = dovi_params[3];
-+    dovi_min_order = dovi_params[4];
-+    dovi_max_order = dovi_params[5];
-+    dovi_lo = dovi_params[6];
++  #define SETUP_DOVI_PARAMS(channel_offset) \
++    dovi_params = src_dovi_params + (channel_offset)*8; \
++    dovi_pivots = src_dovi_pivots + (channel_offset)*8; \
++    dovi_coeffs = src_dovi_coeffs + (channel_offset)*8; \
++    dovi_mmr = src_dovi_mmr + (channel_offset)*48; \
++    dovi_num_pivots = dovi_params[0]; \
++    dovi_has_mmr = dovi_params[1]; \
++    dovi_has_poly = dovi_params[2]; \
++    dovi_mmr_single = dovi_params[3]; \
++    dovi_min_order = dovi_params[4]; \
++    dovi_max_order = dovi_params[5]; \
++    dovi_lo = dovi_params[6]; \
 +    dovi_hi = dovi_params[7];
 +
-+    coeffs = dovi_coeffs[0];
-+    coeffsx = (vec4)coeffs.x;
-+    coeffsy = (vec4)coeffs.y;
-+    coeffsz = (vec4)coeffs.z;
++  #define EXTRACT_COEFFS() \
++    coeffs = dovi_coeffs[0]; \
++    coeffsx = (vec4)coeffs.x; \
++    coeffsy = (vec4)coeffs.y; \
++    coeffsz = (vec4)coeffs.z; \
 +    coeffsw = (vec4)coeffs.w;
 +
++    // Reshape I
++    SETUP_DOVI_PARAMS(0)
++    EXTRACT_COEFFS()
++
 +    if (dovi_num_pivots > 2) {
-+  #ifdef DOVI_PERF_FP16
++      #ifdef DOVI_PERF_FP16
 +        const vec8 pivots0 = vload8(0, (__global const vec *)dovi_pivots);
 +        const vec8 coeffs0 = vload8(0, (__global const vec *)dovi_coeffs);
 +        const vec8 coeffs1 = vload8(1, (__global const vec *)dovi_coeffs);
@@ -1016,64 +1013,56 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +        const vec8 coeffs3 = vload8(3, (__global const vec *)dovi_coeffs);
 +
 +        const vec *pivots = (const vec *)&pivots0;
-+  #else
++      #else
 +        __global const vec *pivots = dovi_pivots;
 +        const vec8 coeffs0 = (vec8)(dovi_coeffs[0], dovi_coeffs[1]);
 +        const vec8 coeffs1 = (vec8)(dovi_coeffs[2], dovi_coeffs[3]);
 +        const vec8 coeffs2 = (vec8)(dovi_coeffs[4], dovi_coeffs[5]);
 +        const vec8 coeffs3 = (vec8)(dovi_coeffs[6], dovi_coeffs[7]);
-+  #endif
-+        vec4 coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.x >= pivots[0])),
-+                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.x >= pivots[2])),
-+                               (vec4)(sig_i4.x >= pivots[1])),
-+                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.x >= pivots[4])),
-+                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.x >= pivots[6])),
-+                               (vec4)(sig_i4.x >= pivots[5])),
-+                           (vec4)(sig_i4.x >= pivots[3]));
-+        coeffsx.x = coeffs_temp.x;
-+        coeffsy.x = coeffs_temp.y;
-+        coeffsz.x = coeffs_temp.z;
-+        coeffsw.x = coeffs_temp.w;
++      #endif
 +
-+        coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.y >= pivots[0])),
-+                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.y >= pivots[2])),
-+                               (vec4)(sig_i4.y >= pivots[1])),
-+                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.y >= pivots[4])),
-+                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.y >= pivots[6])),
-+                               (vec4)(sig_i4.y >= pivots[5])),
-+                           (vec4)(sig_i4.y >= pivots[3]));
-+        coeffsx.y = coeffs_temp.x;
-+        coeffsy.y = coeffs_temp.y;
-+        coeffsz.y = coeffs_temp.z;
-+        coeffsw.y = coeffs_temp.w;
++      #define PICK_COEFF_FOR(LANE)                                                           \
++         mix(                                                                                \
++           mix(                                                                              \
++             mix(coeffs0.lo, coeffs0.hi, (vec4)((LANE) >= pivots[0])),                       \
++             mix(coeffs1.lo, coeffs1.hi, (vec4)((LANE) >= pivots[2])),                       \
++             (vec4)((LANE) >= pivots[1])                                                     \
++           ),                                                                                \
++           mix(                                                                              \
++             mix(coeffs2.lo, coeffs2.hi, (vec4)((LANE) >= pivots[4])),                       \
++             mix(coeffs3.lo, coeffs3.hi, (vec4)((LANE) >= pivots[6])),                       \
++             (vec4)((LANE) >= pivots[5])                                                     \
++           ),                                                                                \
++           (vec4)((LANE) >= pivots[3])                                                       \
++         )
 +
-+        coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.z >= pivots[0])),
-+                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.z >= pivots[2])),
-+                               (vec4)(sig_i4.z >= pivots[1])),
-+                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.z >= pivots[4])),
-+                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.z >= pivots[6])),
-+                               (vec4)(sig_i4.z >= pivots[5])),
-+                           (vec4)(sig_i4.z >= pivots[3]));
-+        coeffsx.z = coeffs_temp.x;
-+        coeffsy.z = coeffs_temp.y;
-+        coeffsz.z = coeffs_temp.z;
-+        coeffsw.z = coeffs_temp.w;
++      #define PACK_COEFFS(LANE)         \
++        coeffsx.LANE = coeffs_temp.x;   \
++        coeffsy.LANE = coeffs_temp.y;   \
++        coeffsz.LANE = coeffs_temp.z;   \
++        coeffsw.LANE = coeffs_temp.w;
 +
-+        coeffs_temp = mix(mix(mix(coeffs0.lo, coeffs0.hi, (vec4)(sig_i4.w >= pivots[0])),
-+                               mix(coeffs1.lo, coeffs1.hi, (vec4)(sig_i4.w >= pivots[2])),
-+                               (vec4)(sig_i4.w >= pivots[1])),
-+                           mix(mix(coeffs2.lo, coeffs2.hi, (vec4)(sig_i4.w >= pivots[4])),
-+                               mix(coeffs3.lo, coeffs3.hi, (vec4)(sig_i4.w >= pivots[6])),
-+                               (vec4)(sig_i4.w >= pivots[5])),
-+                           (vec4)(sig_i4.w >= pivots[3]));
-+        coeffsx.w = coeffs_temp.x;
-+        coeffsy.w = coeffs_temp.y;
-+        coeffsz.w = coeffs_temp.z;
-+        coeffsw.w = coeffs_temp.w;
-     }
++        vec4 coeffs_temp = PICK_COEFF_FOR(sig_i4.x);
++        PACK_COEFFS(x)
++
++        coeffs_temp = PICK_COEFF_FOR(sig_i4.y);;
++        PACK_COEFFS(y)
+ 
+-    // Desaturate the color using a coefficient dependent on the signal level
+-    if (desat_param > 0.0f) {
+-        float luma = get_luma_dst(rgb);
+-        float coeff = max(sig - 0.18f, 1e-6f) / max(sig, 1e-6f);
+-        coeff = native_powr(coeff, 10.0f / desat_param);
+-        rgb = mix(rgb, (float3)luma, (float3)coeff);
+-        sig = mix(sig, luma * slope, coeff);
+-    }
++        coeffs_temp = PICK_COEFF_FOR(sig_i4.z);;
++        PACK_COEFFS(z)
  
 -    sig = TONE_FUNC(sig, peak);
--
++        coeffs_temp = PICK_COEFF_FOR(sig_i4.w);;
++        PACK_COEFFS(w)
+ 
 -    sig = min(sig, 1.0f);
 -    rgb *= (sig/sig_old);
 -    return rgb;
@@ -1085,6 +1074,10 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 -    c = lrgb2lrgb(c);
 -    return c;
 -}
++      #undef PICK_COEFF_FOR
++      #undef PACK_COEFFS
++    }
++
 +    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
 +    #ifdef DOVI_PERF_FP16
 +      coeffw_is_zero = convert_half4(coeffsw == (vec4)M_ZERO_VEC);
@@ -1111,24 +1104,8 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    (*ipt3).x = result.w;
 +
 +    // Reshape P
-+    dovi_params = src_dovi_params + 1*8;
-+    dovi_pivots = src_dovi_pivots + 1*8;
-+    dovi_coeffs = src_dovi_coeffs + 1*8;
-+    dovi_mmr = src_dovi_mmr + 1*48;
-+    dovi_num_pivots = dovi_params[0];
-+    dovi_has_mmr = dovi_params[1];
-+    dovi_has_poly = dovi_params[2];
-+    dovi_mmr_single = dovi_params[3];
-+    dovi_min_order = dovi_params[4];
-+    dovi_max_order = dovi_params[5];
-+    dovi_lo = dovi_params[6];
-+    dovi_hi = dovi_params[7];
-+
-+    coeffs = dovi_coeffs[0];
-+    coeffsx = (vec4)coeffs.x;
-+    coeffsy = (vec4)coeffs.y;
-+    coeffsz = (vec4)coeffs.z;
-+    coeffsw = (vec4)coeffs.w;
++    SETUP_DOVI_PARAMS(1)
++    EXTRACT_COEFFS()
 +
 +    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
 +    t = has_mmr_poly ? coeffs.w == M_ZERO_VEC : dovi_has_poly != M_ZERO_VEC;
@@ -1137,35 +1114,19 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +            : reshape_mmrx4(sig_i4, sig_p4, sig_t4,
 +                            coeffsx, coeffsy, coeffsz, coeffsw, dovi_mmr,
 +                            dovi_mmr_single, dovi_min_order, dovi_max_order);
-+#ifdef DOVI_PERF_FP16
++  #ifdef DOVI_PERF_FP16
 +    result = convert_float4(clamp(sx4, dovi_lo, dovi_hi));
-+#else
++  #else
 +    result = clamp(sx4, dovi_lo, dovi_hi);
-+#endif
++  #endif
 +    (*ipt0).y = result.x;
 +    (*ipt1).y = result.y;
 +    (*ipt2).y = result.z;
 +    (*ipt3).y = result.w;
 +
 +    // Reshape T
-+    dovi_params = src_dovi_params + 2*8;
-+    dovi_pivots = src_dovi_pivots + 2*8;
-+    dovi_coeffs = src_dovi_coeffs + 2*8;
-+    dovi_mmr = src_dovi_mmr + 2*48;
-+    dovi_num_pivots = dovi_params[0];
-+    dovi_has_mmr = dovi_params[1];
-+    dovi_has_poly = dovi_params[2];
-+    dovi_mmr_single = dovi_params[3];
-+    dovi_min_order = dovi_params[4];
-+    dovi_max_order = dovi_params[5];
-+    dovi_lo = dovi_params[6];
-+    dovi_hi = dovi_params[7];
-+
-+    coeffs = dovi_coeffs[0];
-+    coeffsx = (vec4)coeffs.x;
-+    coeffsy = (vec4)coeffs.y;
-+    coeffsz = (vec4)coeffs.z;
-+    coeffsw = (vec4)coeffs.w;
++    SETUP_DOVI_PARAMS(2)
++    EXTRACT_COEFFS()
 +
 +    has_mmr_poly = dovi_has_mmr && dovi_has_poly;
 +    t = has_mmr_poly ? coeffs.w == M_ZERO_VEC : dovi_has_poly != M_ZERO_VEC;
@@ -1183,6 +1144,9 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    (*ipt1).z = result.y;
 +    (*ipt2).z = result.z;
 +    (*ipt3).z = result.w;
++
++  #undef SETUP_DOVI_PARAMS
++  #undef EXTRACT_COEFFS
 +}
 +#endif
 +
