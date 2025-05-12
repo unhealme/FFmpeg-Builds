@@ -953,7 +953,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +                      uchar dovi_min_order,
 +                      uchar dovi_max_order)
 +{
-+    uint mmr_idx = dovi_mmr_single ? 0 : (uint)coeffs.y;
++    uchar mmr_idx = dovi_mmr_single ? 0 : (uchar)coeffs.y;
 +  #ifdef DOVI_PERF_FP16
 +    const vec8 mmr_order1 = vload8(0, (__global const vec *)&dovi_mmr[mmr_idx]);
 +  #else
@@ -982,11 +982,11 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    // Branching is free for PT channels as the condition t is same for all threads.
 +    t = dovi_max_order >= 2 && (dovi_min_order >= 2 || order >= 2);
 +    if (t) {
-+      #ifdef DOVI_PERF_FP16
++  #ifdef DOVI_PERF_FP16
 +        const vec8 mmr_order2 = vload8(1, (__global const vec *)&dovi_mmr[mmr_idx]);
-+      #else
++  #else
 +        const vec8 mmr_order2 = (vec8)(dovi_mmr[mmr_idx + 2], dovi_mmr[mmr_idx + 3]);
-+      #endif
++  #endif
 +        vec4 sig2_i4 = sig_i4 * sig_i4;
 +        vec4 sig2_p4 = sig_p4 * sig_p4;
 +        vec4 sig2_t4 = sig_t4 * sig_t4;
@@ -999,11 +999,11 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +
 +        t = dovi_max_order == 3 && (dovi_min_order == 3 || order >= 3);
 +        if (t) {
-+          #ifdef DOVI_PERF_FP16
++  #ifdef DOVI_PERF_FP16
 +            const vec8 mmr_order3 = vload8(2, (__global const vec *)&dovi_mmr[mmr_idx]);
-+          #else
++  #else
 +            const vec8 mmr_order3 = (vec8)(dovi_mmr[mmr_idx + 4], dovi_mmr[mmr_idx + 5]);
-+          #endif
++  #endif
 +            DOT_MMR(sig2_i4 * sig_i4, sig2_p4 * sig_p4, sig2_t4 * sig_t4,
 +                    sigX2x * sigXx, sigX2y * sigXy, sigX2z * sigXz, sigX2w * sigXw,
 +                    mmr_order3);
@@ -1152,7 +1152,7 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +  #ifdef DOVI_PERF_FP16
 +    coeffw_is_zero = convert_half4(coeffsw == (vec4)M_ZERO_VEC);
 +  #else
-+    coeffw_is_zero = coeffsw == (vec4)M_ZERO_VEC;
++    coeffw_is_zero = convert_float4(coeffsw == (vec4)M_ZERO_VEC);
 +  #endif
 +    do_poly = has_mmr_poly
 +              ? coeffw_is_zero
@@ -1182,11 +1182,11 @@ Index: FFmpeg/libavfilter/opencl/tonemap.cl
 +    EXTRACT_COEFFS()
 +
 +  #define RESHAPE_P_T(sig_x4) \
-+    has_mmr_poly = dovi_has_mmr && dovi_has_poly;                            \
-+    t = has_mmr_poly ? coeffs.w == M_ZERO_VEC : dovi_has_poly != M_ZERO_VEC; \
-+    sx4 = t ? reshape_polyx4(sig_x4, coeffsx, coeffsy, coeffsz)              \
-+            : reshape_mmr_ptx4(sig_i4, sig_p4, sig_t4,                       \
-+                               coeffs, dovi_mmr,                             \
++    has_mmr_poly = dovi_has_mmr && dovi_has_poly;                               \
++    t = has_mmr_poly ? coeffs.w == M_ZERO_VEC : dovi_has_poly != M_ZERO_VEC;    \
++    sx4 = t ? reshape_polyx4(sig_x4, coeffsx, coeffsy, coeffsz)                 \
++            : reshape_mmr_ptx4(sig_i4, sig_p4, sig_t4,                          \
++                               coeffs, dovi_mmr,                                \
 +                               dovi_mmr_single, dovi_min_order, dovi_max_order);
 +
 +    RESHAPE_P_T(sig_p4)
