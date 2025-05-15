@@ -2159,7 +2159,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_opencl.c
 +                }
 +                av_free(device_name);
 +            }
-+        } else if (device_vendor_id == 0x5143 || device_vendor_id == ('Q' | 'C' << 8 | 'O' << 16 | 'M' << 24)) {
++        } else if (device_vendor_id == 0x5143 || device_vendor_id == MKTAG('Q', 'C', 'O', 'M')) {
 +            // Always use tradeoff on Qualcomm due to inconsistent performance
 +            ctx->tradeoff = 1;
 +        } else if (device_is_integrated == CL_TRUE) {
