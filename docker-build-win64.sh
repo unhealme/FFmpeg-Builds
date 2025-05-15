@@ -558,7 +558,7 @@ popd
 popd
 
 # VPL
-git clone -b v2.14.0 --depth=1 https://github.com/intel/libvpl.git
+git clone -b v2.15.0 --depth=1 https://github.com/intel/libvpl.git
 pushd libvpl
 mkdir build && pushd build
 cmake \
@@ -573,6 +573,7 @@ cmake \
     ..
 make -j$(nproc)
 make install
+echo "Libs.private: -lstdc++" >> ${FF_DEPS_PREFIX}/lib/pkgconfig/vpl.pc
 popd
 popd
 

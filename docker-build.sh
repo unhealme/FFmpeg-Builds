@@ -414,7 +414,7 @@ prepare_extra_amd64() {
     # Provides VPL header and dispatcher (libvpl.so.2) for FFmpeg
     # Both MSDK and VPL runtime can be loaded by VPL dispatcher
     pushd ${SOURCE_DIR}
-    git clone -b v2.14.0 --depth=1 https://github.com/intel/libvpl.git
+    git clone -b v2.15.0 --depth=1 https://github.com/intel/libvpl.git
     pushd libvpl
     sed -i 's|ParseEnvSearchPaths(ONEVPL_PRIORITY_PATH_VAR, searchDirList)|searchDirList.push_back("/usr/lib/jellyfin-ffmpeg/lib")|g' libvpl/src/mfx_dispatcher_vpl_loader.cpp
     mkdir build && pushd build
@@ -427,6 +427,7 @@ prepare_extra_amd64() {
           -DBUILD_{TESTS,EXAMPLES,EXPERIMENTAL}=OFF \
           ..
     make -j$(nproc) && make install && make install DESTDIR=${SOURCE_DIR}/intel
+    echo "Libs.private: -lstdc++" >> ${TARGET_DIR}/lib/pkgconfig/vpl.pc
     echo "intel${TARGET_DIR}/lib/libvpl.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
     popd
     popd
@@ -435,7 +436,7 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-25.2.1 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.2.2 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
     # Fix missing entries in PicStruct validation
     wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/c7eb030.patch | git apply
@@ -457,12 +458,10 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-25.2.1 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.2.2 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
     wget -q -O - https://github.com/intel/media-driver/commit/25fb926.patch | git apply
-    # Fix DG1 support in upstream i915 KMD (prod DKMS is not required)
-    wget -q -O - https://github.com/intel/media-driver/commit/93c07d9.patch | git apply
     mkdir build && pushd build
     cmake -DCMAKE_INSTALL_PREFIX=${TARGET_DIR} \
           -DENABLE_KERNELS=ON \
@@ -556,14 +555,15 @@ prepare_extra_amd64() {
         pushd ${SOURCE_DIR}
         mkdir mesa
         pushd mesa
-        mesa_ver="mesa-25.0.5"
+        mesa_ver="mesa-25.0.6"
         mesa_link="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${mesa_ver}/mesa-${mesa_ver}.tar.gz"
         wget ${mesa_link} -O mesa.tar.gz
         tar xaf mesa.tar.gz
         # Cherry-pick fixes targeting mesa-stable
         wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/ee4d7e98.patch | git -C mesa-${mesa_ver} apply
         wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/8aadce68.patch | git -C mesa-${mesa_ver} apply
-        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/cb9ae704.patch | git -C mesa-${mesa_ver} apply
+        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/3db6eaad.patch | git -C mesa-${mesa_ver} apply
+        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/8d9022b8.patch | git -C mesa-${mesa_ver} apply
         meson setup mesa-${mesa_ver} mesa_build \
             --prefix=${TARGET_DIR} \
             --libdir=lib \
