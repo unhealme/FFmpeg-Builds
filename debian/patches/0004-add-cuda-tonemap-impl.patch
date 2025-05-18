@@ -1909,7 +1909,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_cuda.c
-@@ -0,0 +1,1233 @@
+@@ -0,0 +1,1232 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -2840,7 +2840,6 @@ Index: FFmpeg/libavfilter/vf_tonemap_cuda.c
 +static int do_tonemap(AVFilterContext *ctx, AVFrame *out, AVFrame *in)
 +{
 +    TonemapCUDAContext *s = ctx->priv;
-+    AVFilterLink *outlink = ctx->outputs[0];
 +    AVFrame *src = in;
 +    int ret;
 +
