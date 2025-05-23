@@ -216,6 +216,20 @@ make -j$(nproc)
 make install
 popd
 
+# UNIBREAK
+git clone --depth=1 https://github.com/adah1972/libunibreak.git
+pushd libunibreak
+./bootstrap
+./configure \
+    --prefix=${FF_DEPS_PREFIX} \
+    --host=${FF_TOOLCHAIN} \
+    --disable-shared \
+    --enable-static \
+    --with-pic
+make -j$(nproc)
+make install
+popd
+
 # LIBASS
 git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
 pushd libass
@@ -224,7 +238,7 @@ pushd libass
     --prefix=${FF_DEPS_PREFIX} \
     --host=${FF_TOOLCHAIN} \
     --disable-shared \
-    --enable-static \
+    --enable-{static,libunibreak} \
     --with-pic
 make -j$(nproc)
 make install

@@ -1,23 +1,22 @@
 #!/bin/bash
 
-SCRIPT_REPO="https://github.com/libass/libass.git"
-SCRIPT_COMMIT="1b699559025185e34d21a24cac477ca360cb917d"
+SCRIPT_REPO="https://github.com/adah1972/libunibreak.git"
+SCRIPT_COMMIT="32dc4fabf20176aeaa63c4880cc53cc123e53261"
 
 ffbuild_enabled() {
     return 0
 }
 
 ffbuild_dockerbuild() {
-    git-mini-clone "$SCRIPT_REPO" "$SCRIPT_COMMIT" ass
-    cd ass
+    git-mini-clone "$SCRIPT_REPO" "$SCRIPT_COMMIT" libunibreak
+    cd libunibreak
 
-    ./autogen.sh
+    ./bootstrap
 
     local myconf=(
         --prefix="$FFBUILD_PREFIX"
         --disable-shared
         --enable-static
-        --enable-libunibreak
         --with-pic
     )
 
@@ -32,17 +31,7 @@ ffbuild_dockerbuild() {
         return -1
     fi
 
-    export CFLAGS="$CFLAGS -Dread_file=libass_internal_read_file"
-
     ./configure "${myconf[@]}"
     make -j$(nproc)
     make install
-}
-
-ffbuild_configure() {
-    echo --enable-libass
-}
-
-ffbuild_unconfigure() {
-    echo --disable-libass
 }

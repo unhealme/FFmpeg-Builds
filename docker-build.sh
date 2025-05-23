@@ -150,6 +150,22 @@ prepare_extra_common() {
     echo "harfbuzz/libharfbuzz.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
     popd
 
+    # UNIBREAK
+    pushd ${SOURCE_DIR}
+    git clone --depth=1 https://github.com/adah1972/libunibreak.git
+    pushd libunibreak
+    ./bootstrap
+    ./configure \
+        ${CROSS_OPT} \
+        --prefix=${TARGET_DIR} \
+        --enable-shared \
+        --disable-static \
+        --with-pic
+    make -j$(nproc) && make install && make install DESTDIR=${SOURCE_DIR}/libunibreak
+    echo "libunibreak${TARGET_DIR}/lib/libunibreak.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
+    popd
+    popd
+
     # LIBASS
     pushd ${SOURCE_DIR}
     git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
@@ -158,8 +174,8 @@ prepare_extra_common() {
     ./configure \
         ${CROSS_OPT} \
         --prefix=${TARGET_DIR} \
-        --enable-shared \
         --disable-static \
+        --enable-{shared,libunibreak} \
         --with-pic
     make -j$(nproc) && make install && make install DESTDIR=${SOURCE_DIR}/libass
     echo "libass${TARGET_DIR}/lib/libass.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}

@@ -21,6 +21,7 @@ makedepends=("${MINGW_PACKAGE_PREFIX}-autotools"
 depends=("${MINGW_PACKAGE_PREFIX}-jellyfin-fribidi"
          "${MINGW_PACKAGE_PREFIX}-jellyfin-fontconfig"
          "${MINGW_PACKAGE_PREFIX}-jellyfin-freetype"
+         "${MINGW_PACKAGE_PREFIX}-jellyfin-libunibreak"
          "${MINGW_PACKAGE_PREFIX}-jellyfin-harfbuzz")
 source=(https://github.com/libass/${_realname}/releases/download/${pkgver}/${_realname}-${pkgver}.tar.xz)
 sha256sums=('SKIP')
@@ -48,7 +49,7 @@ build() {
     --disable-shared \
     --enable-static \
     --enable-directwrite \
-    --disable-libunibreak \
+    --enable-libunibreak \
     --with-pic \
     $( [[ "${CARCH}" != "i686" \
       && "${CARCH}" != "x86_64" ]] \
