@@ -2559,7 +2559,7 @@ Index: FFmpeg/libavfilter/colorspace.c
  #include "libavutil/frame.h"
  #include "libavutil/mastering_display_metadata.h"
  #include "libavutil/pixdesc.h"
-@@ -354,3 +355,51 @@ float inverse_eotf_arib_b67(float x) {
+@@ -359,3 +360,51 @@ float inverse_eotf_arib_b67(float x) {
  float inverse_eotf_bt1886(float x) {
      return x > 0.0f ? powf(x, 1.0f / 2.4f) : 0.0f;
  }
@@ -2615,7 +2615,7 @@ Index: FFmpeg/libavfilter/colorspace.h
 ===================================================================
 --- FFmpeg.orig/libavfilter/colorspace.h
 +++ FFmpeg/libavfilter/colorspace.h
-@@ -109,4 +109,8 @@ float eotf_arib_b67(float x);
+@@ -110,4 +110,8 @@ float eotf_arib_b67(float x);
  float inverse_eotf_arib_b67(float x);
  float inverse_eotf_bt1886(float x);
  
@@ -2628,7 +2628,7 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemapx.c
-@@ -0,0 +1,1935 @@
+@@ -0,0 +1,1948 @@
 +/*
 + * This file is part of FFmpeg.
 + *
@@ -2691,6 +2691,8 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +#define MIX(x, y, a) ((x) + ((y) - (x)) * (a))
 +#define CLAMP(a, b, c) (FFMIN(FFMAX((a), (b)), (c)))
 +
++#define REF_WHITE_SCALE (REFERENCE_WHITE / REFERENCE_WHITE_ALT)
++
 +enum TonemapAlgorithm {
 +    TONEMAP_NONE,
 +    TONEMAP_LINEAR,
@@ -2716,6 +2718,7 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +    double param;
 +    double desat;
 +    double peak;
++    double src_peak;
 +    int apply_dovi;
 +
 +    const AVLumaCoefficients *coeffs, *ocoeffs;
@@ -4088,7 +4091,6 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +    const AVPixFmtDescriptor *desc;
 +    const AVPixFmtDescriptor *odesc;
 +    int ret;
-+    double peak = s->peak;
 +    const AVLumaCoefficients *coeffs;
 +    ThreadData td;
 +
@@ -4136,13 +4138,20 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +    }
 +
 +    /* read peak from side data if not passed in */
-+    if (!peak) {
++    if (!s->peak) {
 +        if (dovi_sd) {
 +            const AVDOVIMetadata *metadata = (AVDOVIMetadata *) dovi_sd->data;
-+            s->peak = ff_determine_dovi_signal_peak(metadata);
-+        } else {
-+            s->peak = ff_determine_signal_peak(in);
++            s->src_peak = ff_determine_dovi_signal_peak(metadata, 1);
++            s->src_peak *= REF_WHITE_SCALE;
++        } else if (!s->src_peak) {
++            s->src_peak = ff_determine_signal_peak(in);
++            s->src_peak *= REF_WHITE_SCALE;
 +        }
++        av_log(s, AV_LOG_DEBUG, "Computed signal peak: %f "
++               "at pts %"PRId64"\n", s->src_peak, in->pts);
++        // sanity check
++        if (s->src_peak <= REF_WHITE_SCALE)
++            s->src_peak = 10.0f * REF_WHITE_SCALE;
 +    }
 +
 +    if (dovi_sd) {
@@ -4211,8 +4220,8 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +            goto fail;
 +    }
 +
-+    if (!s->tonemap_lut || s->lut_peak != peak) {
-+        s->lut_peak = peak;
++    if (!s->tonemap_lut || s->lut_peak != s->src_peak) {
++        s->lut_peak = s->src_peak;
 +        if ((ret = compute_tonemap_lut(s, in->color_trc)) < 0)
 +            goto fail;
 +    }
@@ -4233,7 +4242,7 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +    td.out   = out;
 +    td.desc  = desc;
 +    td.odesc = odesc;
-+    td.peak  = peak;
++    td.peak  = s->src_peak;
 +    ff_filter_execute(ctx, s->filter_slice, &td, NULL,
 +                      FFMIN(outlink->h >> FFMAX(desc->log2_chroma_h, odesc->log2_chroma_h), ff_filter_get_nb_threads(ctx)));
 +
@@ -4498,7 +4507,11 @@ Index: FFmpeg/libavfilter/vf_tonemapx.c
 +        s->param = 1.0f;
 +
 +    if (s->peak)
-+        s->peak = FFMAX(s->peak / 10.0f, 1.1f);
++        s->src_peak = s->peak / 10.0f * REF_WHITE_SCALE;
++
++    // sanity check
++    if (s->src_peak <= REF_WHITE_SCALE)
++        s->src_peak = 10.0f * REF_WHITE_SCALE;
 +
 +    return 0;
 +}

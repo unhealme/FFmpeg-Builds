@@ -70,6 +70,9 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +//------------
 +// Metal Tonemapping
 +
++#define REFERENCE_WHITE_ALT 203.0f
++#define REFERENCE_WHITE_HLG 3.17955f
++
 +#define ST2084_MAX_LUMINANCE 10000.0f
 +#define ST2084_M1 0.1593017578125f
 +#define ST2084_M2 78.84375f
@@ -83,46 +86,43 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +
 +#define FLOAT_EPS 1e-6f
 +
-+constant float ref_white [[function_constant(0)]];
-+constant float tone_param [[function_constant(1)]];
-+constant float desat_param [[function_constant(2)]];
-+constant float target_peak [[function_constant(3)]];
-+constant float scene_threshold [[function_constant(4)]];
-+constant float pq_max_lum_div_ref_white [[function_constant(5)]];
-+constant float ref_white_div_pq_max_lum [[function_constant(6)]];
-+constant short tonemap_func_type [[function_constant(7)]];
-+constant bool is_tone_func_bt2390 [[function_constant(8)]];
-+constant bool is_tone_mode_rgb [[function_constant(9)]];
-+constant bool is_tone_mode_max [[function_constant(10)]];
-+constant bool is_non_semi_planar_in [[function_constant(11)]];
-+constant bool is_non_semi_planar_out [[function_constant(12)]];
-+constant bool enable_dither [[function_constant(13)]];
-+constant float dither_size2 [[function_constant(14)]];
-+constant float dither_quantization [[function_constant(15)]];
-+constant bool is_full_range_in [[function_constant(16)]];
-+constant bool is_full_range_out [[function_constant(17)]];
-+constant int chroma_loc [[function_constant(18)]];
-+constant bool is_rgb2rgb_passthrough [[function_constant(19)]];
-+constant float3 rgb2rgb_matrix_1 [[function_constant(20)]];
-+constant float3 rgb2rgb_matrix_2 [[function_constant(21)]];
-+constant float3 rgb2rgb_matrix_3 [[function_constant(22)]];
-+constant bool skip_tonemap [[function_constant(23)]];
-+constant bool dovi_reshape [[function_constant(24)]];
-+constant float3 ycc2rgb_offset [[function_constant(25)]];
-+constant float3 rgb_matrix_1 [[function_constant(26)]];
-+constant float3 rgb_matrix_2 [[function_constant(27)]];
-+constant float3 rgb_matrix_3 [[function_constant(28)]];
-+constant float3 lms2rgb_matrix_1 [[function_constant(29)]];
-+constant float3 lms2rgb_matrix_2 [[function_constant(30)]];
-+constant float3 lms2rgb_matrix_3 [[function_constant(31)]];
-+constant float3 yuv_matrix_1 [[function_constant(32)]];
-+constant float3 yuv_matrix_2 [[function_constant(33)]];
-+constant float3 yuv_matrix_3 [[function_constant(34)]];
-+constant float3 luma_dst [[function_constant(35)]];
-+constant short linearize_type [[function_constant(36)]];
-+constant short delinearize_type [[function_constant(37)]];
-+constant bool map_in_src_space [[function_constant(38)]];
-+constant bool is_tone_mode_itp [[function_constant(39)]];
++constant float tone_param [[function_constant(0)]];
++constant float desat_param [[function_constant(1)]];
++constant float target_peak [[function_constant(2)]];
++constant float scene_threshold [[function_constant(3)]];
++constant short tonemap_func_type [[function_constant(4)]];
++constant bool is_tone_func_bt2390 [[function_constant(5)]];
++constant bool is_tone_mode_rgb [[function_constant(6)]];
++constant bool is_tone_mode_max [[function_constant(7)]];
++constant bool is_non_semi_planar_in [[function_constant(8)]];
++constant bool is_non_semi_planar_out [[function_constant(9)]];
++constant bool enable_dither [[function_constant(10)]];
++constant float dither_size2 [[function_constant(11)]];
++constant float dither_quantization [[function_constant(12)]];
++constant bool is_full_range_in [[function_constant(13)]];
++constant bool is_full_range_out [[function_constant(14)]];
++constant int chroma_loc [[function_constant(15)]];
++constant bool is_rgb2rgb_passthrough [[function_constant(16)]];
++constant float3 rgb2rgb_matrix_1 [[function_constant(17)]];
++constant float3 rgb2rgb_matrix_2 [[function_constant(18)]];
++constant float3 rgb2rgb_matrix_3 [[function_constant(19)]];
++constant bool skip_tonemap [[function_constant(20)]];
++constant bool dovi_reshape [[function_constant(21)]];
++constant float3 ycc2rgb_offset [[function_constant(22)]];
++constant float3 rgb_matrix_1 [[function_constant(23)]];
++constant float3 rgb_matrix_2 [[function_constant(24)]];
++constant float3 rgb_matrix_3 [[function_constant(25)]];
++constant float3 lms2rgb_matrix_1 [[function_constant(26)]];
++constant float3 lms2rgb_matrix_2 [[function_constant(27)]];
++constant float3 lms2rgb_matrix_3 [[function_constant(28)]];
++constant float3 yuv_matrix_1 [[function_constant(29)]];
++constant float3 yuv_matrix_2 [[function_constant(30)]];
++constant float3 yuv_matrix_3 [[function_constant(31)]];
++constant float3 luma_dst [[function_constant(32)]];
++constant short linearize_type [[function_constant(33)]];
++constant short delinearize_type [[function_constant(34)]];
++constant bool map_in_src_space [[function_constant(35)]];
++constant bool is_tone_mode_itp [[function_constant(36)]];
 +
 +enum AVChromaLocation {
 +    AVCHROMA_LOC_UNSPECIFIED,
@@ -166,7 +166,7 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +}
 +
 +float eotf_st2084(float x) {
-+    return eotf_st2084_common(x) * pq_max_lum_div_ref_white;
++    return eotf_st2084_common(x) * ST2084_MAX_LUMINANCE / REFERENCE_WHITE_ALT;
 +}
 +
 +float4 eotf_st2084x4(float4 x) {
@@ -174,7 +174,7 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +    x.y = eotf_st2084_common(x.y);
 +    x.z = eotf_st2084_common(x.z);
 +    x.w = eotf_st2084_common(x.w);
-+    return x * pq_max_lum_div_ref_white;
++    return x * ST2084_MAX_LUMINANCE / REFERENCE_WHITE_ALT;
 +}
 +
 +// delinearizer for PQ/ST2084
@@ -187,12 +187,12 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +}
 +
 +float inverse_eotf_st2084(float x) {
-+    x *= ref_white_div_pq_max_lum;
++    x *= REFERENCE_WHITE_ALT / ST2084_MAX_LUMINANCE;
 +    return inverse_eotf_st2084_common(x);
 +}
 +
 +float4 inverse_eotf_st2084x4(float4 x) {
-+    x *= ref_white_div_pq_max_lum;
++    x *= REFERENCE_WHITE_ALT / ST2084_MAX_LUMINANCE;
 +    x.x = inverse_eotf_st2084_common(x.x);
 +    x.y = inverse_eotf_st2084_common(x.y);
 +    x.z = inverse_eotf_st2084_common(x.z);
@@ -224,12 +224,12 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +
 +// linearizer for HLG/ARIB-B67
 +float eotf_arib_b67(float x) {
-+    return ootf_1_2(inverse_oetf_arib_b67(x)) * 5.0f;
++    return ootf_1_2(inverse_oetf_arib_b67(x)) * (12.0f / REFERENCE_WHITE_HLG);
 +}
 +
 +// delinearizer for HLG/ARIB-B67
 +float inverse_eotf_arib_b67(float x) {
-+    return oetf_arib_b67(inverse_ootf_1_2(x / 5.0f));
++    return oetf_arib_b67(inverse_ootf_1_2(x / (12.0f / REFERENCE_WHITE_HLG)));
 +}
 +
 +float4 oetf_arib_b67x4(float4 x) {
@@ -605,7 +605,7 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +        }
 +        if (is_tone_func_bt2390) {
 +            float src_peak_delin_pq = inverse_eotf_st2084(peak);
-+            float dst_peak_delin_pq = inverse_eotf_st2084(1.0f);
++            float dst_peak_delin_pq = inverse_eotf_st2084(target_peak);
 +            MAP_FOUR_PIXELS(sig_r, src_peak_delin_pq, dst_peak_delin_pq)
 +            MAP_FOUR_PIXELS(sig_g, src_peak_delin_pq, dst_peak_delin_pq)
 +            MAP_FOUR_PIXELS(sig_b, src_peak_delin_pq, dst_peak_delin_pq)
@@ -613,9 +613,9 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +            sig_g = fmin(eotf_st2084x4(sig_g), peak);
 +            sig_b = fmin(eotf_st2084x4(sig_b), peak);
 +        } else {
-+            MAP_FOUR_PIXELS(sig_r, peak, 1.0f)
-+            MAP_FOUR_PIXELS(sig_g, peak, 1.0f)
-+            MAP_FOUR_PIXELS(sig_b, peak, 1.0f)
++            MAP_FOUR_PIXELS(sig_r, peak, target_peak)
++            MAP_FOUR_PIXELS(sig_g, peak, target_peak)
++            MAP_FOUR_PIXELS(sig_b, peak, target_peak)
 +            sig_r = fmin(sig_r, 1.0f);
 +            sig_g = fmin(sig_g, 1.0f);
 +            sig_b = fmin(sig_b, 1.0f);
@@ -643,11 +643,11 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +        }
 +        if (is_tone_func_bt2390) {
 +            float src_peak_delin_pq = inverse_eotf_st2084(peak);
-+            float dst_peak_delin_pq = inverse_eotf_st2084(1.0f);
++            float dst_peak_delin_pq = inverse_eotf_st2084(target_peak);
 +            MAP_FOUR_PIXELS(i4, src_peak_delin_pq, dst_peak_delin_pq)
 +        } else {
 +            i4 = eotf_st2084x4(i4);
-+            MAP_FOUR_PIXELS(i4, peak, 1.0f)
++            MAP_FOUR_PIXELS(i4, peak, target_peak)
 +            i4 = inverse_eotf_st2084x4(i4);
 +        }
 +        i4 = fmin(i4, 1.0f);
@@ -681,12 +681,12 @@ Index: FFmpeg/libavfilter/metal/vf_tonemap_videotoolbox.metal
 +        }
 +        if (is_tone_func_bt2390) {
 +            float src_peak_delin_pq = inverse_eotf_st2084(peak);
-+            float dst_peak_delin_pq = inverse_eotf_st2084(1.0f);
++            float dst_peak_delin_pq = inverse_eotf_st2084(target_peak);
 +            sig = inverse_eotf_st2084x4(sig);
 +            MAP_FOUR_PIXELS(sig, src_peak_delin_pq, dst_peak_delin_pq)
 +            sig = fmin(eotf_st2084x4(sig), peak);
 +        } else {
-+            MAP_FOUR_PIXELS(sig, peak, 1.0f)
++            MAP_FOUR_PIXELS(sig, peak, target_peak)
 +            sig = fmin(sig, 1.0f);
 +        }
 +        float4 factor = sig / sig_o;
@@ -966,7 +966,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
-@@ -0,0 +1,1209 @@
+@@ -0,0 +1,1211 @@
 +/*
 + * Copyright (c) 2024 Gnattu OC <gnattuoc@me.com>
 + *
@@ -1013,6 +1013,8 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +#define pivots_sz pivots_cnt*sizeof(float)
 +#define coeffs_sz coeffs_cnt*sizeof(float)
 +#define mmr_sz mmr_cnt*sizeof(float)
++
++#define REF_WHITE_SCALE (REFERENCE_WHITE / REFERENCE_WHITE_ALT)
 +
 +extern char ff_vf_tonemap_videotoolbox_metallib_data[];
 +extern unsigned int ff_vf_tonemap_videotoolbox_metallib_len;
@@ -1065,6 +1067,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    enum AVPixelFormat          format;
 +    int                         apply_dovi;
 +    double                      peak;
++    double                      src_peak;
 +    double                      target_peak;
 +    double                      param;
 +    double                      final_param;
@@ -1302,13 +1305,10 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +
 +    MTLFunctionConstantValues* constant_values = [MTLFunctionConstantValues new];
 +    dispatch_data_t lib_data;
-+    float ref_white = REFERENCE_WHITE_ALT;
 +    float tone_param;
 +    float desat_param;
 +    float target_peak;
 +    float scene_threshold;
-+    float pq_max_lum_div_ref_white;
-+    float ref_white_div_pq_max_lum;
 +    short tonemap_func_type;
 +    bool is_tone_func_bt2390;
 +    bool is_tone_mode_rgb;
@@ -1361,7 +1361,11 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +        ctx->final_param = 1.0f;
 +
 +    if (ctx->peak)
-+        ctx->peak = FFMAX(ctx->peak / 10.0f, 1.1f);
++        ctx->src_peak = ctx->peak / 10.0f * REF_WHITE_SCALE;
++
++    // sanity check
++    if (ctx->src_peak <= REF_WHITE_SCALE)
++        ctx->src_peak = 10.0f * REF_WHITE_SCALE;
 +
 +    // SDR peak is 1.0f
 +    ctx->target_peak = 1.0f;
@@ -1448,8 +1452,6 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    desat_param = (float)ctx->desat_param;
 +    target_peak = (float)ctx->target_peak;
 +    scene_threshold = (float)ctx->scene_threshold;
-+    pq_max_lum_div_ref_white = (float)(ST2084_MAX_LUMINANCE / ref_white);
-+    ref_white_div_pq_max_lum = (float)(ref_white / ST2084_MAX_LUMINANCE);
 +    tonemap_func_type = (short)ctx->tonemap;
 +    is_tone_func_bt2390 = ctx->tonemap == TONEMAP_BT2390;
 +    is_tone_mode_rgb = ctx->tonemap_mode == TONEMAP_MODE_RGB;
@@ -1467,13 +1469,10 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    dovi_reshape = !!ctx->dovi;
 +    map_in_src_space = !is_tone_mode_rgb && !is_tone_mode_max;
 +
-+    [constant_values setConstantValue:&ref_white type:MTLDataTypeFloat withName:@"ref_white"];
 +    [constant_values setConstantValue:&tone_param type:MTLDataTypeFloat withName:@"tone_param"];
 +    [constant_values setConstantValue:&desat_param type:MTLDataTypeFloat withName:@"desat_param"];
 +    [constant_values setConstantValue:&target_peak type:MTLDataTypeFloat withName:@"target_peak"];
 +    [constant_values setConstantValue:&scene_threshold type:MTLDataTypeFloat withName:@"scene_threshold"];
-+    [constant_values setConstantValue:&pq_max_lum_div_ref_white type:MTLDataTypeFloat withName:@"pq_max_lum_div_ref_white"];
-+    [constant_values setConstantValue:&ref_white_div_pq_max_lum type:MTLDataTypeFloat withName:@"ref_white_div_pq_max_lum"];
 +
 +    [constant_values setConstantValue:&tonemap_func_type type:MTLDataTypeShort withName:@"tonemap_func_type"];
 +    [constant_values setConstantValue:&is_tone_func_bt2390 type:MTLDataTypeBool withName:@"is_tone_func_bt2390"];
@@ -1869,11 +1868,14 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +    if (!ctx->peak) {
 +        if (dovi_sd) {
 +            const AVDOVIMetadata *metadata = (AVDOVIMetadata *) dovi_sd->data;
-+            ctx->peak = ff_determine_dovi_signal_peak(metadata);
-+        } else {
-+            ctx->peak = ff_determine_signal_peak(input);
++            ctx->src_peak = ff_determine_dovi_signal_peak(metadata, 0);
++            ctx->src_peak *= REF_WHITE_SCALE;
++        } else if (!ctx->src_peak) {
++            ctx->src_peak = ff_determine_signal_peak(input);
++            ctx->src_peak *= REF_WHITE_SCALE;
 +        }
-+        av_log(ctx, AV_LOG_DEBUG, "Computed signal peak: %f\n", ctx->peak);
++        av_log(ctx, AV_LOG_DEBUG, "Computed signal peak: %f "
++               "at pts %"PRId64"\n", ctx->src_peak, input->pts);
 +    }
 +
 +    if (dovi_sd) {
@@ -1996,7 +1998,7 @@ Index: FFmpeg/libavfilter/vf_tonemap_videotoolbox.m
 +                out_u_uv_tex,
 +                in_v_tex,
 +                out_v_tex,
-+                (float)ctx->peak);
++                (float)ctx->src_peak);
 +
 +    CFRelease(in_y);
 +    CFRelease(in_u_uv);
