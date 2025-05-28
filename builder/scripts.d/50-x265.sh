@@ -13,6 +13,11 @@ ffbuild_dockerbuild() {
     cd x265
     git checkout "$SCRIPT_COMMIT"
 
+    # Unbreak GCC 15
+    if [[ $TARGET != mac* ]]; then
+        sed -i '1i#include <cstdint>' source/dynamicHDR10/json11/json11.cpp
+    fi
+
     # Unbreak build compat with CMake 4.0+
     if [[ $TARGET == mac* ]]; then
         gsed -i 's/CMP0025 OLD/CMP0025 NEW/g' source/CMakeLists.txt

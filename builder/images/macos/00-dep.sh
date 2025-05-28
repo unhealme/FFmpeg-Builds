@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ffbuild_macbase() {
-  brew install wget subversion mercurial autoconf automake cmake meson ninja pkg-config coreutils gcc make python-setuptools pcre2 libtool gnu-sed gnu-tar nasm quilt
+  brew install wget subversion mercurial autoconf automake cmake meson ninja pkg-config coreutils gcc make python-setuptools pcre2 libtool gnu-sed gnu-tar nasm quilt texinfo
   mkdir /opt/ffbuild/bin
   cp "$BUILDER_ROOT"/images/base/git-mini-clone.sh /opt/ffbuild/bin/git-mini-clone
   chmod +x /opt/ffbuild/bin/git-mini-clone
