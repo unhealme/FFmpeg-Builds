@@ -61,7 +61,7 @@ prepare_extra_common() {
 
     # LIBXML2
     pushd ${SOURCE_DIR}
-    libxml2_ver="v2.13.6"
+    libxml2_ver="v2.14.3"
     if [[ $( lsb_release -c -s ) == "focal" ]]; then
         # newer versions require automake 1.16.3+
         libxml2_ver="v2.9.14"
@@ -150,6 +150,22 @@ prepare_extra_common() {
     echo "harfbuzz/libharfbuzz.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
     popd
 
+    # UNIBREAK
+    pushd ${SOURCE_DIR}
+    git clone --depth=1 https://github.com/adah1972/libunibreak.git
+    pushd libunibreak
+    ./bootstrap
+    ./configure \
+        ${CROSS_OPT} \
+        --prefix=${TARGET_DIR} \
+        --enable-shared \
+        --disable-static \
+        --with-pic
+    make -j$(nproc) && make install && make install DESTDIR=${SOURCE_DIR}/libunibreak
+    echo "libunibreak${TARGET_DIR}/lib/libunibreak.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
+    popd
+    popd
+
     # LIBASS
     pushd ${SOURCE_DIR}
     git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
@@ -158,8 +174,8 @@ prepare_extra_common() {
     ./configure \
         ${CROSS_OPT} \
         --prefix=${TARGET_DIR} \
-        --enable-shared \
         --disable-static \
+        --enable-{shared,libunibreak} \
         --with-pic
     make -j$(nproc) && make install && make install DESTDIR=${SOURCE_DIR}/libass
     echo "libass${TARGET_DIR}/lib/libass.so* usr/lib/jellyfin-ffmpeg/lib" >> ${DPKG_INSTALL_LIST}
@@ -436,7 +452,7 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-25.2.2 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.2.3 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
     # Fix missing entries in PicStruct validation
     wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/c7eb030.patch | git apply
@@ -458,7 +474,7 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-25.2.2 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.2.3 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
     wget -q -O - https://github.com/intel/media-driver/commit/25fb926.patch | git apply
@@ -479,7 +495,7 @@ prepare_extra_amd64() {
 
     # Vulkan Headers
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.311 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
+    git clone -b v1.4.315 --depth=1 https://github.com/KhronosGroup/Vulkan-Headers.git
     pushd Vulkan-Headers
     mkdir build && pushd build
     cmake \
@@ -492,7 +508,7 @@ prepare_extra_amd64() {
 
     # Vulkan ICD Loader
     pushd ${SOURCE_DIR}
-    git clone -b v1.4.311 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
+    git clone -b v1.4.315 --depth=1 https://github.com/KhronosGroup/Vulkan-Loader.git
     pushd Vulkan-Loader
     mkdir build && pushd build
     cmake \
@@ -512,7 +528,7 @@ prepare_extra_amd64() {
     popd
 
     # SHADERC
-    shaderc_ver="v2024.4"
+    shaderc_ver="v2025.2"
     if [[ ${GCC_VER} -lt 9 ]]; then
         shaderc_ver="v2023.5"
     fi
@@ -555,15 +571,12 @@ prepare_extra_amd64() {
         pushd ${SOURCE_DIR}
         mkdir mesa
         pushd mesa
-        mesa_ver="mesa-25.0.6"
+        mesa_ver="mesa-25.0.7"
         mesa_link="https://gitlab.freedesktop.org/mesa/mesa/-/archive/${mesa_ver}/mesa-${mesa_ver}.tar.gz"
         wget ${mesa_link} -O mesa.tar.gz
         tar xaf mesa.tar.gz
         # Cherry-pick fixes targeting mesa-stable
         wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/ee4d7e98.patch | git -C mesa-${mesa_ver} apply
-        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/8aadce68.patch | git -C mesa-${mesa_ver} apply
-        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/3db6eaad.patch | git -C mesa-${mesa_ver} apply
-        wget -q -O - https://gitlab.freedesktop.org/mesa/mesa/-/commit/8d9022b8.patch | git -C mesa-${mesa_ver} apply
         meson setup mesa-${mesa_ver} mesa_build \
             --prefix=${TARGET_DIR} \
             --libdir=lib \
@@ -617,7 +630,7 @@ prepare_extra_amd64() {
 
     # LIBPLACEBO
     pushd ${SOURCE_DIR}
-    git clone -b v7.349.0 --recursive --depth=1 https://github.com/haasn/libplacebo.git
+    git clone -b v7.351.0 --recursive --depth=1 https://github.com/haasn/libplacebo.git
     # Wa for the regression made in Mesa RADV
     git -C libplacebo apply ${SOURCE_DIR}/builder/patches/libplacebo/*.patch
     sed -i 's|env: python_env,||g' libplacebo/src/vulkan/meson.build
@@ -643,7 +656,7 @@ prepare_extra_amd64() {
 prepare_extra_arm() {
     # RKMPP
     pushd ${SOURCE_DIR}
-    git clone -b jellyfin-mpp --depth=1 https://github.com/nyanmisaka/mpp.git rkmpp
+    git clone -b jellyfin-mpp-next --depth=1 https://github.com/nyanmisaka/mpp.git rkmpp
     pushd rkmpp
     mkdir rkmpp_build
     pushd rkmpp_build
@@ -662,7 +675,7 @@ prepare_extra_arm() {
 
     # RKRGA
     pushd ${SOURCE_DIR}
-    git clone -b jellyfin-rga --depth=1 https://github.com/nyanmisaka/rk-mirrors.git rkrga
+    git clone -b jellyfin-rga-next --depth=1 https://github.com/nyanmisaka/rk-mirrors.git rkrga
     meson setup rkrga rkrga_build \
         ${MESON_CROSS_OPT} \
         --prefix=${TARGET_DIR} \

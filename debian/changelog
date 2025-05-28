@@ -3,6 +3,8 @@ jellyfin-ffmpeg (7.1.1-4) unstable; urgency=medium
   * Add OpenCL based YADIF & BWDIF deinterlacing filters
   * Tune the default async_depth for AMF encoders
   * Port 3DLUT based tonemapping to CUDA
+  * Apply DOVI L1 metadata when available
+  * Allow QSV Enc to bail out from unsupported low-power mode
 
  -- nyanmisaka <nst799610810@gmail.com>  Fri, 16 May 2025 20:33:46 +0800
 

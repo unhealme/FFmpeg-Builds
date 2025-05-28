@@ -6,8 +6,8 @@ set -o errexit
 set -o xtrace
 
 # Update mingw-w64 headers
-mingw_commit="b025331084febc41e108698bf3ac6c39c6ccfba2"
-git clone https://git.code.sf.net/p/mingw-w64/mingw-w64.git
+mingw_commit="6b2176247a83644113aa209acbeeaf8cdc78a8fa"
+git clone https://github.com/mingw-w64/mingw-w64.git
 pushd mingw-w64/mingw-w64-headers
 git checkout ${mingw_commit}
 ./configure \
@@ -47,7 +47,7 @@ popd
 popd
 
 # LIBXML2
-git clone -b v2.13.6 --depth=1 https://github.com/GNOME/libxml2.git
+git clone -b v2.14.3 --depth=1 https://github.com/GNOME/libxml2.git
 pushd libxml2
 ./autogen.sh \
     --prefix=${FF_DEPS_PREFIX} \
@@ -156,7 +156,7 @@ popd
 popd
 
 # LZMA
-git clone -b v5.6.4 --depth=1 https://github.com/tukaani-project/xz.git
+git clone -b v5.8.1 --depth=1 https://github.com/tukaani-project/xz.git
 pushd xz
 ./autogen.sh --no-po4a --no-doxygen
 ./configure \
@@ -216,6 +216,20 @@ make -j$(nproc)
 make install
 popd
 
+# UNIBREAK
+git clone --depth=1 https://github.com/adah1972/libunibreak.git
+pushd libunibreak
+./bootstrap
+./configure \
+    --prefix=${FF_DEPS_PREFIX} \
+    --host=${FF_TOOLCHAIN} \
+    --disable-shared \
+    --enable-static \
+    --with-pic
+make -j$(nproc)
+make install
+popd
+
 # LIBASS
 git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
 pushd libass
@@ -224,7 +238,7 @@ pushd libass
     --prefix=${FF_DEPS_PREFIX} \
     --host=${FF_TOOLCHAIN} \
     --disable-shared \
-    --enable-static \
+    --enable-{static,libunibreak} \
     --with-pic
 make -j$(nproc)
 make install
