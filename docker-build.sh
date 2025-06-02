@@ -6,7 +6,7 @@ set -o errexit
 set -o xtrace
 
 DEBIAN_ADDR=http://deb.debian.org/debian/
-UBUNTU_ARCHIVE_ADDR=http://archive.ubuntu.com/ubuntu/
+UBUNTU_ARCHIVE_ADDR=http://mirrors.kernel.org/ubuntu/ # http://archive.ubuntu.com/ubuntu/
 UBUNTU_PORTS_ADDR=http://ports.ubuntu.com/ubuntu-ports/
 
 # Prepare common extra libs for amd64 and arm64
