@@ -6,9 +6,6 @@ ORIG_VERSION := $(shell dpkg-parsechangelog -S version)
 VERSION_SUFFIX := $(shell lsb_release -c -s)
 PACKAGE_VERSION := "$(ORIG_VERSION)-$(VERSION_SUFFIX)"
 FLTO_OPTIONS := auto
-ifeq ($(VERSION_SUFFIX),focal)
-	FLTO_OPTIONS := $(shell nproc)
-endif
 
 CONFIG := --prefix=${TARGET_DIR} \
 	--target-os=linux \
