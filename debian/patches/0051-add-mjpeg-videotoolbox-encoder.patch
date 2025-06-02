@@ -2,7 +2,7 @@ Index: FFmpeg/configure
 ===================================================================
 --- FFmpeg.orig/configure
 +++ FFmpeg/configure
-@@ -3524,6 +3524,8 @@ h264_videotoolbox_encoder_deps="pthreads
+@@ -3525,6 +3525,8 @@ h264_videotoolbox_encoder_deps="pthreads
  h264_videotoolbox_encoder_select="atsc_a53 videotoolbox_encoder"
  hevc_videotoolbox_encoder_deps="pthreads"
  hevc_videotoolbox_encoder_select="atsc_a53 videotoolbox_encoder"
@@ -20,9 +20,9 @@ Index: FFmpeg/libavcodec/Makefile
  OBJS-$(CONFIG_MJPEG_QSV_ENCODER)       += qsvenc_jpeg.o
  OBJS-$(CONFIG_MJPEG_VAAPI_ENCODER)     += vaapi_encode_mjpeg.o
 +OBJS-$(CONFIG_MJPEG_VIDEOTOOLBOX_ENCODER) += videotoolboxenc.o
+ OBJS-$(CONFIG_MJPEG_RKMPP_DECODER)     += rkmppdec.o
  OBJS-$(CONFIG_MJPEG_RKMPP_ENCODER)     += rkmppenc.o
  OBJS-$(CONFIG_MLP_DECODER)             += mlpdec.o mlpdsp.o
- OBJS-$(CONFIG_MLP_ENCODER)             += mlpenc.o mlp.o
 Index: FFmpeg/libavcodec/allcodecs.c
 ===================================================================
 --- FFmpeg.orig/libavcodec/allcodecs.c
@@ -32,9 +32,9 @@ Index: FFmpeg/libavcodec/allcodecs.c
  extern const FFCodec ff_mjpeg_qsv_decoder;
  extern const FFCodec ff_mjpeg_vaapi_encoder;
 +extern const FFCodec ff_mjpeg_videotoolbox_encoder;
+ extern const FFCodec ff_mjpeg_rkmpp_decoder;
  extern const FFCodec ff_mjpeg_rkmpp_encoder;
  extern const FFCodec ff_mp3_mediacodec_decoder;
- extern const FFCodec ff_mp3_mf_encoder;
 Index: FFmpeg/libavcodec/videotoolboxenc.c
 ===================================================================
 --- FFmpeg.orig/libavcodec/videotoolboxenc.c
