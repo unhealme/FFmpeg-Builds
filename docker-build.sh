@@ -6,7 +6,7 @@ set -o errexit
 set -o xtrace
 
 DEBIAN_ADDR=http://deb.debian.org/debian/
-UBUNTU_ARCHIVE_ADDR=http://archive.ubuntu.com/ubuntu/
+UBUNTU_ARCHIVE_ADDR=http://mirrors.kernel.org/ubuntu/ # http://archive.ubuntu.com/ubuntu/
 UBUNTU_PORTS_ADDR=http://ports.ubuntu.com/ubuntu-ports/
 
 # Prepare common extra libs for amd64 and arm64
@@ -62,10 +62,6 @@ prepare_extra_common() {
     # LIBXML2
     pushd ${SOURCE_DIR}
     libxml2_ver="v2.14.3"
-    if [[ $( lsb_release -c -s ) == "focal" ]]; then
-        # newer versions require automake 1.16.3+
-        libxml2_ver="v2.9.14"
-    fi
     git clone -b ${libxml2_ver} --depth=1 https://github.com/GNOME/libxml2.git
     pushd libxml2
     ./autogen.sh \
@@ -529,9 +525,6 @@ prepare_extra_amd64() {
 
     # SHADERC
     shaderc_ver="v2025.2"
-    if [[ ${GCC_VER} -lt 9 ]]; then
-        shaderc_ver="v2023.5"
-    fi
     pushd ${SOURCE_DIR}
     git clone -b ${shaderc_ver} --depth=1 https://github.com/google/shaderc.git
     pushd shaderc

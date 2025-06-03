@@ -32,7 +32,7 @@ jobs:
     uses: ./.github/workflows/_meta.yaml
     with:
       distro: 'ubuntu'
-      codenames: '["focal", "jammy", "noble"]'
+      codenames: '["jammy", "noble"]'
       architectures: '["amd64", "arm64"]'
       release: false
 
