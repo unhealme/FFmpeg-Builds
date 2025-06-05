@@ -82,9 +82,10 @@
 0082-add-yadif-and-bwdif-opencl-filter-impl.patch
 0083-allow-vpp-tonemap-without-hdr10-metadata.patch
 0084-allow-qsvenc-to-bail-out-from-unsupported-low-power-mode.patch
-0085-remove-el-when-stripping-dovi-metadata.patch
-0086-fix-missing-allowed-extensions-in-hls-demuxer.patch
-0087-fix-avcodec-params-when-bsfs-are-enable-by-decoder.patch
-0088-fix-display-matrix-not-removed-after-autorotation.patch
-0089-unbreak-build-with-latest-svtav1-3-0.patch
-0090-backport-fix-for-missing-h264-sei-build-deps.patch
+0085-pass-eac3-addbsi-to-movenc-for-dolby-atmos-remuxing.patch
+0086-remove-el-when-stripping-dovi-metadata.patch
+0087-fix-missing-allowed-extensions-in-hls-demuxer.patch
+0088-fix-avcodec-params-when-bsfs-are-enable-by-decoder.patch
+0089-fix-display-matrix-not-removed-after-autorotation.patch
+0090-unbreak-build-with-latest-svtav1-3-0.patch
+0091-backport-fix-for-missing-h264-sei-build-deps.patch
