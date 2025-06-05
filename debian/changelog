@@ -5,6 +5,7 @@ jellyfin-ffmpeg (7.1.1-5) unstable; urgency=medium
   * rkrga: refine colorspace conversion handling
   * rkmppenc: fix rgb2yuv CSC when the input is RGB formats
   * Drop Ubuntu 20.04 Focal as it reached EOL
+  * Pass E-AC-3 addbsi to movenc for Dolby Atmos remuxing
 
  -- nyanmisaka <nst799610810@gmail.com>  Mon, 2 Jun 2025 14:31:36 +0800
 
