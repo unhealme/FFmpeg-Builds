@@ -89,4 +89,4 @@
 0089-fix-display-matrix-not-removed-after-autorotation.patch
 0090-unbreak-build-with-latest-svtav1-3-0.patch
 0091-backport-fix-for-missing-h264-sei-build-deps.patch
-0092-dont-return-ext-error-for-invalid-vt-frame
+0092-dont-return-ext-error-for-invalid-vt-frame.patch
