@@ -1,3 +1,10 @@
+jellyfin-ffmpeg (7.1.1-6) unstable; urgency=medium
+
+  * lavc/videotoolbox: don't return external error for invalid vt frame
+  * Add NV15 format input support for certain OpenCL filters
+
+ -- nyanmisaka <nst799610810@gmail.com>  Sun, 8 Jun 2025 18:14:53 +0800
+
 jellyfin-ffmpeg (7.1.1-5) unstable; urgency=medium
 
   * rkmppdec: add RKMPP MJPEG decoder
