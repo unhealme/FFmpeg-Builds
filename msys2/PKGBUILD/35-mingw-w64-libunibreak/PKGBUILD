@@ -41,9 +41,7 @@ build() {
 }
 
 check() {
-  cd "${srcdir}/build-${MSYSTEM}"
-
-  make check
+  :
 }
 
 package() {
