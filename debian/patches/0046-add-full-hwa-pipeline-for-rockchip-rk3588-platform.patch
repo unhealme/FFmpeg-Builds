@@ -6722,15 +6722,40 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
          if (!mapping->object_buffers[i]) {
              av_log(dst_fc, AV_LOG_ERROR, "Failed to create CL buffer "
                     "from object %d (fd %d, size %"SIZE_SPECIFIER") of DRM frame: %d.\n",
-@@ -3250,6 +3265,8 @@ static int opencl_map_from_drm_arm(AVHWF
-                 goto fail;
-             }
+@@ -3241,14 +3256,26 @@ static int opencl_map_from_drm_arm(AVHWF
+             cl_buffer_region region;
+             int p = mapping->nb_planes;
  
+-            err = opencl_get_plane_format(src_fc->sw_format, p,
+-                                          src_fc->width, src_fc->height,
+-                                          &image_format, &image_desc);
+-            if (err < 0) {
+-                av_log(dst_fc, AV_LOG_ERROR, "Invalid plane %d (DRM "
+-                       "layer %d plane %d): %d.\n", p, i, j, err);
+-                goto fail;
++            if (src_fc->sw_format == AV_PIX_FMT_NV15) {
++                av_assert0(desc->nb_layers == 1 && layer->nb_planes == 2);
++                memset(&image_format, 0, sizeof(image_format));
++                memset(&image_desc,   0, sizeof(image_desc));
++                image_desc.image_type   = CL_MEM_OBJECT_IMAGE2D;
++                image_desc.image_width  = src_fc->width * 10 / 8;
++                image_desc.image_height = src_fc->height >> j;
++                image_format.image_channel_data_type = CL_UNSIGNED_INT8;
++                image_format.image_channel_order     = CL_R;
++            } else {
++                err = opencl_get_plane_format(src_fc->sw_format, p,
++                                              src_fc->width, src_fc->height,
++                                              &image_format, &image_desc);
++                if (err < 0) {
++                    av_log(dst_fc, AV_LOG_ERROR, "Invalid plane %d (DRM "
++                           "layer %d plane %d): %d.\n", p, i, j, err);
++                    goto fail;
++                }
+             }
 +            image_desc.image_row_pitch = plane->pitch;
-+
+ 
              region.origin = plane->offset;
              region.size   = image_desc.image_row_pitch *
-                             image_desc.image_height;
 Index: FFmpeg/libavutil/hwcontext_rkmpp.c
 ===================================================================
 --- /dev/null
