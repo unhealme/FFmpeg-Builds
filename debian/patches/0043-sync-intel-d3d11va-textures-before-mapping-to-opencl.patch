@@ -221,7 +221,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
      OpenCLDeviceContext  *device_priv = dst_fc->device_ctx->hwctx;
      OpenCLFramesContext  *frames_priv = dst_fc->hwctx;
      AVOpenCLDeviceContext    *dst_dev = &device_priv->p;
-@@ -2865,6 +2995,18 @@ static int opencl_map_from_d3d11(AVHWFra
+@@ -2877,6 +3007,19 @@ static int opencl_map_from_d3d11(AVHWFra
          }
      }
  
@@ -233,7 +233,8 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 +
 +        if (frames_priv->sync_point || frames_priv->sync_tex_2x2) {
 +            opencl_sync_d3d11_texture(frames_priv, device_hwctx,
-+                                      tex, index, dst_fc);
++                                      tex, (src_hwctx->texture ? index : 0),
++                                      dst_fc);
 +        }
 +    }
 +
