@@ -209,7 +209,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
                 "handle: %d.\n", cle);
      }
  
-@@ -2553,37 +2609,175 @@ static int opencl_map_from_d3d11(AVHWFra
+@@ -2553,37 +2609,187 @@ static int opencl_map_from_d3d11(AVHWFra
  {
      OpenCLDeviceContext  *device_priv = dst_fc->device_ctx->hwctx;
      OpenCLFramesContext  *frames_priv = dst_fc->hwctx;
@@ -225,9 +225,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 +    const cl_mem *mem_objs;
 +    cl_uint num_objs;
 +    int err, i, p, nb_planes = 2;
- 
--    index = (intptr_t)src->data[1];
--    if (index >= frames_priv->nb_mapped_frames) {
++
 +    cl_flags = opencl_mem_flags_for_mapping(flags);
 +    if (!cl_flags)
 +        return AVERROR(EINVAL);
@@ -245,25 +243,39 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 +        }
 +    } else
 +        return AVERROR(ENOSYS);
-+
+ 
+-    index = (intptr_t)src->data[1];
+-    if (index >= frames_priv->nb_mapped_frames) {
 +    if (src_fc->initial_pool_size == 0) {
 +        av_log(dst_fc, AV_LOG_ERROR, "Only fixed-size pools are supported "
 +               "for D3D11 to OpenCL mapping.\n");
 +        return AVERROR(EINVAL);
 +    }
-+    if (index >= src_fc->initial_pool_size) {
++    if (src_hwctx->texture && index >= src_fc->initial_pool_size) {
          av_log(dst_fc, AV_LOG_ERROR, "Texture array index out of range for "
 -               "mapping: %d >= %d.\n", index, frames_priv->nb_mapped_frames);
 +               "mapping: %d >= %d.\n", index, src_fc->initial_pool_size);
          return AVERROR(EINVAL);
      }
++    if (!src_hwctx->texture) {
++        for (i = 0; i < src_fc->initial_pool_size; i++) {
++            if (src_hwctx->texture_infos[i].texture == tex) {
++                index = i; break;
++            }
++        }
++        if (i >= src_fc->initial_pool_size) {
++            av_log(dst_fc, AV_LOG_ERROR, "Array of textures index not found for "
++                   "mapping: %d >= %d.\n", i, src_fc->initial_pool_size);
++            return AVERROR(EINVAL);
++        }
++    }
 +    av_log(dst_fc, AV_LOG_DEBUG, "Map D3D11 texture %d to OpenCL.\n", index);
++
++    if (!frames_priv->mapped_frames) {
++        frames_priv->nb_mapped_frames = src_fc->initial_pool_size;
  
 -    av_log(dst_fc, AV_LOG_DEBUG, "Map D3D11 texture %d to OpenCL.\n",
 -           index);
-+    if (!frames_priv->mapped_frames) {
-+        frames_priv->nb_mapped_frames = src_fc->initial_pool_size;
-+
 +        frames_priv->mapped_frames =
 +            av_calloc(frames_priv->nb_mapped_frames,
 +                      sizeof(*frames_priv->mapped_frames));
@@ -281,7 +293,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 +    // deferred clCreateFromD3D11Texture2DKHR() for low startup latency.
 +    if (device_priv->d3d11_map_intel) {
 +        for (p = 0; p < desc->nb_planes; p++) {
-+            UINT subresource = 2 * index + p;
++            UINT subresource = src_hwctx->texture ? (2 * index + p) : p;
 +
 +            if (desc->planes[p])
 +                continue;
@@ -303,7 +315,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 +        if (!desc->planes[desc->nb_planes - 1]) {
 +            // put the multiple-plane AMD shared image at the end.
 +            desc->planes[desc->nb_planes - 1] = device_priv->clCreateFromD3D11Texture2DKHR(
-+                dst_dev->context, cl_flags, tex, index, &cle);
++                dst_dev->context, cl_flags, tex, (src_hwctx->texture ? index : 0), &cle);
 +            if (!desc->planes[desc->nb_planes - 1]) {
 +                av_log(dst_fc, AV_LOG_ERROR, "Failed to create CL image "
 +                       "from D3D11 texture index %d: %d.\n", index, cle);
@@ -395,7 +407,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
          dst->data[i] = (uint8_t*)desc->planes[i];
  
      err = ff_hwframe_map_create(dst->hw_frames_ctx, dst, src,
-@@ -2598,76 +2792,13 @@ static int opencl_map_from_d3d11(AVHWFra
+@@ -2598,76 +2804,13 @@ static int opencl_map_from_d3d11(AVHWFra
  
  fail:
      cle = device_priv->clEnqueueReleaseD3D11ObjectsKHR(
@@ -444,7 +456,8 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 -    if (!frames_priv->mapped_frames)
 -        return AVERROR(ENOMEM);
 -
--    for (i = 0; i < frames_priv->nb_mapped_frames; i++) {
++fail2:
+     for (i = 0; i < frames_priv->nb_mapped_frames; i++) {
 -        AVOpenCLFrameDescriptor *desc = &frames_priv->mapped_frames[i];
 -        desc->nb_planes = nb_planes;
 -        for (p = 0; p < nb_planes; p++) {
@@ -468,14 +481,13 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
 -    return 0;
 -
 -fail:
-+fail2:
-     for (i = 0; i < frames_priv->nb_mapped_frames; i++) {
+-    for (i = 0; i < frames_priv->nb_mapped_frames; i++) {
 -        AVOpenCLFrameDescriptor *desc = &frames_priv->mapped_frames[i];
 +        desc = &frames_priv->mapped_frames[i];
          for (p = 0; p < desc->nb_planes; p++) {
              if (desc->planes[p])
                  clReleaseMemObject(desc->planes[p]);
-@@ -2675,6 +2806,9 @@ fail:
+@@ -2675,6 +2818,9 @@ fail:
      }
      av_freep(&frames_priv->mapped_frames);
      frames_priv->nb_mapped_frames = 0;
@@ -485,7 +497,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
      return err;
  }
  
-@@ -3012,12 +3146,6 @@ static int opencl_frames_derive_to(AVHWF
+@@ -3012,12 +3158,6 @@ static int opencl_frames_derive_to(AVHWF
      case AV_HWDEVICE_TYPE_D3D11VA:
          if (!priv->d3d11_mapping_usable)
              return AVERROR(ENOSYS);

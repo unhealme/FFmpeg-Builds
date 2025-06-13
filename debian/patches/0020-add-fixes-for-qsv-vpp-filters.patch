@@ -11,7 +11,15 @@ Index: FFmpeg/libavfilter/qsvvpp.c
      return ret;
  }
  
-@@ -460,8 +460,12 @@ static QSVFrame *submit_frame(QSVVPPCont
+@@ -437,6 +437,7 @@ static QSVFrame *submit_frame(QSVVPPCont
+ 
+             qsv_frame->frame->width   = picref->width;
+             qsv_frame->frame->height  = picref->height;
++            qsv_frame->frame->pts     = picref->pts;
+ 
+             if (av_frame_copy(qsv_frame->frame, picref) < 0) {
+                 av_frame_free(&qsv_frame->frame);
+@@ -460,8 +461,12 @@ static QSVFrame *submit_frame(QSVVPPCont
              !(qsv_frame->frame->flags & AV_FRAME_FLAG_INTERLACED) ? MFX_PICSTRUCT_PROGRESSIVE :
              ((qsv_frame->frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST) ? MFX_PICSTRUCT_FIELD_TFF :
                                                   MFX_PICSTRUCT_FIELD_BFF);
@@ -25,7 +33,7 @@ Index: FFmpeg/libavfilter/qsvvpp.c
      else if (qsv_frame->frame->repeat_pict == 2)
          qsv_frame->surface.Info.PicStruct |= MFX_PICSTRUCT_FRAME_DOUBLING;
      else if (qsv_frame->frame->repeat_pict == 4)
-@@ -913,8 +917,13 @@ static int qsvvpp_init_vpp_session(AVFil
+@@ -913,8 +918,13 @@ static int qsvvpp_init_vpp_session(AVFil
  
          /* Query VPP params again, including params for frame */
          ret = MFXVideoVPP_Query(s->session, &s->vpp_param, &s->vpp_param);
