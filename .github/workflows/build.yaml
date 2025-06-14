@@ -36,12 +36,13 @@ jobs:
       architectures: '["amd64", "arm64"]'
       release: false
 
-  build_portable_windows:
-    uses: ./.github/workflows/_meta_portable.yaml
-    with:
-      os: 'windows'
-      architectures: '["win64"]'
-      release: false
+  # Disabled as clang is stable.
+  # build_portable_windows:
+  #   uses: ./.github/workflows/_meta_portable.yaml
+  #   with:
+  #     os: 'windows'
+  #     architectures: '["win64"]'
+  #     release: false
 
   build_portable_windows_clang:
     uses: ./.github/workflows/_meta_win_clang_portable.yaml
