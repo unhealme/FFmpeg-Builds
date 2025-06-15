@@ -6,6 +6,7 @@ usage() {
     echo -e "Releases:          Arches:"
     echo -e " * bullseye         * amd64"
     echo -e " * bookworm         * arm64"
+    echo -e " * trixie"
     echo -e " * jammy"
     echo -e " * noble"
 }
@@ -28,6 +29,12 @@ case ${cli_release} in
         gcc_ver="12"
         llvm_ver="19"
         llvmspirvlib_ver="15"
+    ;;
+    'trixie')
+        release="debian:trixie"
+        gcc_ver="14"
+        llvm_ver="19"
+        llvmspirvlib_ver="19"
     ;;
     'jammy')
         release="ubuntu:jammy"

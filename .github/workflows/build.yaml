@@ -8,14 +8,12 @@ on:
   push:
     branches:
       - jellyfin
-      - jellyfin-7.0
     paths-ignore:
       - '**/*.md'
 
   pull_request:
     branches:
       - jellyfin
-      - jellyfin-7.0
     paths-ignore:
       - '**/*.md'
 
@@ -24,7 +22,7 @@ jobs:
     uses: ./.github/workflows/_meta.yaml
     with:
       distro: 'debian'
-      codenames: '["bullseye", "bookworm"]'
+      codenames: '["bullseye", "bookworm", "trixie"]'
       architectures: '["amd64", "arm64"]'
       release: false
 

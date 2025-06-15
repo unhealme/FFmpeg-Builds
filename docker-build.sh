@@ -713,16 +713,10 @@ EOF
     fi
     # Add arm64 architecture
     dpkg --add-architecture arm64
-    # Update and install cross-gcc-dev
     apt-get update && apt-get dist-upgrade -y
-    yes | apt-get install -y cross-gcc-dev
-    # Generate gcc cross source
-    TARGET_LIST="arm64" cross-gcc-gensource ${GCC_VER}
     # Install dependencies
-    pushd cross-gcc-packages-amd64/cross-gcc-${GCC_VER}-arm64
     ln -fs /usr/share/zoneinfo/America/Toronto /etc/localtime
     yes | apt-get install -y -o Dpkg::Options::="--force-overwrite" -o APT::Immediate-Configure=0 gcc-${GCC_VER}-source gcc-${GCC_VER}-aarch64-linux-gnu g++-${GCC_VER}-aarch64-linux-gnu libstdc++6-arm64-cross binutils-aarch64-linux-gnu bison flex libtool gdb sharutils netbase libmpc-dev libmpfr-dev systemtap-sdt-dev autogen expect chrpath zip libc6-dev:arm64 linux-libc-dev:arm64 libgcc1:arm64 libstdc++6:arm64
-    popd
 }
 
 # Set the architecture-specific options

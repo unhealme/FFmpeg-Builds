@@ -7,6 +7,8 @@ packages:
   - bullseye-arm64
   - bookworm-amd64
   - bookworm-arm64
+  - trixie-amd64
+  - trixie-arm64
   - jammy-amd64
   - jammy-arm64
   - noble-amd64
