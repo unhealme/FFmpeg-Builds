@@ -231,7 +231,7 @@ make install
 popd
 
 # LIBASS
-git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
+git clone -b 0.17.4 --depth=1 https://github.com/libass/libass.git
 pushd libass
 ./autogen.sh
 ./configure \
