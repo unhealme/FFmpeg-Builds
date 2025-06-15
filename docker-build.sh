@@ -164,7 +164,7 @@ prepare_extra_common() {
 
     # LIBASS
     pushd ${SOURCE_DIR}
-    git clone -b 0.17.3 --depth=1 https://github.com/libass/libass.git
+    git clone -b 0.17.4 --depth=1 https://github.com/libass/libass.git
     pushd libass
     ./autogen.sh
     ./configure \
@@ -448,7 +448,7 @@ prepare_extra_amd64() {
     # VPL-GPU-RT (RT only)
     # Provides VPL runtime (libmfx-gen.so.1.2) for 11th Gen Tiger Lake and newer
     pushd ${SOURCE_DIR}
-    git clone -b intel-onevpl-25.2.3 --depth=1 https://github.com/intel/vpl-gpu-rt.git
+    git clone -b intel-onevpl-25.2.4 --depth=1 https://github.com/intel/vpl-gpu-rt.git
     pushd vpl-gpu-rt
     # Fix missing entries in PicStruct validation
     wget -q -O - https://github.com/intel/vpl-gpu-rt/commit/c7eb030.patch | git apply
@@ -470,7 +470,7 @@ prepare_extra_amd64() {
     # Full Feature Build: ENABLE_KERNELS=ON(Default) ENABLE_NONFREE_KERNELS=ON(Default)
     # Free Kernel Build: ENABLE_KERNELS=ON ENABLE_NONFREE_KERNELS=OFF
     pushd ${SOURCE_DIR}
-    git clone -b intel-media-25.2.3 --depth=1 https://github.com/intel/media-driver.git
+    git clone -b intel-media-25.2.4 --depth=1 https://github.com/intel/media-driver.git
     pushd media-driver
     # Enable VC1 decode on DG2 (note that MTL+ is not supported)
     wget -q -O - https://github.com/intel/media-driver/commit/25fb926.patch | git apply
@@ -713,16 +713,10 @@ EOF
     fi
     # Add arm64 architecture
     dpkg --add-architecture arm64
-    # Update and install cross-gcc-dev
     apt-get update && apt-get dist-upgrade -y
-    yes | apt-get install -y cross-gcc-dev
-    # Generate gcc cross source
-    TARGET_LIST="arm64" cross-gcc-gensource ${GCC_VER}
     # Install dependencies
-    pushd cross-gcc-packages-amd64/cross-gcc-${GCC_VER}-arm64
     ln -fs /usr/share/zoneinfo/America/Toronto /etc/localtime
     yes | apt-get install -y -o Dpkg::Options::="--force-overwrite" -o APT::Immediate-Configure=0 gcc-${GCC_VER}-source gcc-${GCC_VER}-aarch64-linux-gnu g++-${GCC_VER}-aarch64-linux-gnu libstdc++6-arm64-cross binutils-aarch64-linux-gnu bison flex libtool gdb sharutils netbase libmpc-dev libmpfr-dev systemtap-sdt-dev autogen expect chrpath zip libc6-dev:arm64 linux-libc-dev:arm64 libgcc1:arm64 libstdc++6:arm64
-    popd
 }
 
 # Set the architecture-specific options

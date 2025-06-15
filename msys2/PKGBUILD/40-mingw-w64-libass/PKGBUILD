@@ -3,7 +3,7 @@
 _realname=libass
 pkgbase=mingw-w64-jellyfin-${_realname}
 pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
-pkgver=0.17.3
+pkgver=0.17.4
 pkgrel=1
 pkgdesc="A portable library for SSA/ASS subtitles rendering (mingw-w64)"
 arch=('any')
