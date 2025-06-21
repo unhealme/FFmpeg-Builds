@@ -1,0 +1,22 @@
+Index: FFmpeg/libavcodec/dovi_rpudec.c
+===================================================================
+--- FFmpeg.orig/libavcodec/dovi_rpudec.c
++++ FFmpeg/libavcodec/dovi_rpudec.c
+@@ -413,9 +413,16 @@ int ff_dovi_rpu_parse(DOVIContext *s, co
+             rpu_size--;
+     }
+ 
+-    if (!rpu_size || rpu[rpu_size - 1] != 0x80)
++    if (!rpu_size)
+         return AVERROR_INVALIDDATA;
+ 
++    if (rpu[rpu_size - 1] != 0x80) {
++        av_log(s->logctx, AV_LOG_WARNING, "RPU trailing padding bytes "
++               "mismatch: 0x%x != 0x%x\n", rpu[rpu_size - 1], 0x80);
++        if (err_recognition & (AV_EF_AGGRESSIVE | AV_EF_EXPLODE))
++            return AVERROR_INVALIDDATA;
++    }
++
+     if (err_recognition & AV_EF_CRCCHECK) {
+         uint32_t crc = av_bswap32(av_crc(av_crc_get_table(AV_CRC_32_IEEE),
+                                   -1, rpu, rpu_size - 1)); /* exclude 0x80 */
