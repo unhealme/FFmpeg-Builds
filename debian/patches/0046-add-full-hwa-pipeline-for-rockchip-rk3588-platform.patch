@@ -299,7 +299,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
   *
   * This file is part of FFmpeg.
   *
-@@ -19,551 +20,1475 @@
+@@ -19,551 +20,1477 @@
   * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
   */
  
@@ -1577,6 +1577,8 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +
 +        if (av_opt_serialize(r, 0, 0, &opts, '=', ' ') >= 0)
 +            av_log(avctx, AV_LOG_VERBOSE, "Decoder options: %s\n", opts);
++        if (opts)
++            av_freep(&opts);
 +
 +        av_log(avctx, AV_LOG_VERBOSE, "Configured with size: %dx%d | pix_fmt: %s | sw_pix_fmt: %s\n",
 +               avctx->width, avctx->height,
@@ -4053,7 +4055,7 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 ===================================================================
 --- /dev/null
 +++ FFmpeg/libavfilter/rkrga_common.c
-@@ -0,0 +1,1420 @@
+@@ -0,0 +1,1423 @@
 +/*
 + * Copyright (c) 2023 NyanMisaka
 + *
@@ -5299,6 +5301,9 @@ Index: FFmpeg/libavfilter/rkrga_common.c
 +    clear_frame_list(&r->pat_frame_list);
 +
 +    clear_frame_list(&r->pat_preproc_frame_list);
++
++    if (r->in_rga_frame_infos)
++        av_freep(&r->in_rga_frame_infos);
 +
 +    av_fifo_freep2(&r->async_fifo);
 +
@@ -6701,7 +6706,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
          {
              OpenCLDeviceSelector selector = {
                  .platform_index      = -1,
-@@ -3184,7 +3198,8 @@ static int opencl_map_from_drm_arm(AVHWF
+@@ -3197,7 +3211,8 @@ static int opencl_map_from_drm_arm(AVHWF
  {
      AVHWFramesContext *src_fc =
          (AVHWFramesContext*)src->hw_frames_ctx->data;
@@ -6711,7 +6716,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
      const AVDRMFrameDescriptor *desc;
      DRMARMtoOpenCLMapping *mapping = NULL;
      cl_mem_flags cl_flags;
-@@ -3218,8 +3233,8 @@ static int opencl_map_from_drm_arm(AVHWF
+@@ -3231,8 +3246,8 @@ static int opencl_map_from_drm_arm(AVHWF
          }
  
          mapping->object_buffers[i] =
@@ -6722,7 +6727,7 @@ Index: FFmpeg/libavutil/hwcontext_opencl.c
          if (!mapping->object_buffers[i]) {
              av_log(dst_fc, AV_LOG_ERROR, "Failed to create CL buffer "
                     "from object %d (fd %d, size %"SIZE_SPECIFIER") of DRM frame: %d.\n",
-@@ -3241,14 +3256,26 @@ static int opencl_map_from_drm_arm(AVHWF
+@@ -3254,14 +3269,26 @@ static int opencl_map_from_drm_arm(AVHWF
              cl_buffer_region region;
              int p = mapping->nb_planes;
  
