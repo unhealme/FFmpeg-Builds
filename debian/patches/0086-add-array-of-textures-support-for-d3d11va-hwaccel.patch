@@ -169,7 +169,7 @@ Index: FFmpeg/libavcodec/dxva2.c
  
      sctx->decoder_ref = bufref_wrap_interface((IUnknown *)sctx->d3d11_decoder);
      if (!sctx->decoder_ref)
-@@ -716,9 +759,15 @@ int ff_dxva2_common_frame_params(AVCodec
+@@ -716,9 +759,19 @@ int ff_dxva2_common_frame_params(AVCodec
      if (frames_ctx->format == AV_PIX_FMT_D3D11) {
          AVD3D11VAFramesContext *frames_hwctx = frames_ctx->hwctx;
          AVD3D11VADeviceContext *device_hwctx = device_ctx->hwctx;
@@ -180,12 +180,16 @@ Index: FFmpeg/libavcodec/dxva2.c
          frames_hwctx->BindFlags |= D3D11_BIND_DECODER;
          frames_hwctx->require_sync = device_hwctx->device_desc.VendorId == 0x8086;
 +
-+        if (!d3d11va_get_decoder_desc_and_config(avctx, frames_ctx, 0, &decoder_guid, &desc, &config))
++        if (!d3d11va_get_decoder_desc_and_config(avctx, frames_ctx, 0, &decoder_guid, &desc, &config)) {
 +            frames_hwctx->array_of_tex = d3d11va_prefer_array_of_tex(avctx, config);
++
++            if (frames_hwctx->array_of_tex && device_hwctx->device_desc.VendorId == 0x1002)
++                frames_hwctx->require_sync = 1;
++        }
      }
  #endif
  
-@@ -823,14 +872,40 @@ int ff_dxva2_decode_uninit(AVCodecContex
+@@ -823,14 +876,40 @@ int ff_dxva2_decode_uninit(AVCodecContex
      return 0;
  }
  
@@ -228,7 +232,7 @@ Index: FFmpeg/libavcodec/dxva2.c
              av_log((void *)avctx, AV_LOG_ERROR, "get_buffer frame is invalid!\n");
              return NULL;
          }
-@@ -853,8 +928,10 @@ unsigned ff_dxva2_get_surface_index(cons
+@@ -853,8 +932,10 @@ unsigned ff_dxva2_get_surface_index(cons
      }
  #endif
  #if CONFIG_D3D11VA
