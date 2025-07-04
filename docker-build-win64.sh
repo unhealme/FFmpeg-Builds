@@ -47,7 +47,7 @@ popd
 popd
 
 # LIBXML2
-git clone -b v2.14.3 --depth=1 https://github.com/GNOME/libxml2.git
+git clone -b v2.14.4 --depth=1 https://github.com/GNOME/libxml2.git
 pushd libxml2
 ./autogen.sh \
     --prefix=${FF_DEPS_PREFIX} \
