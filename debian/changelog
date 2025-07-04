@@ -1,3 +1,12 @@
+jellyfin-ffmpeg (7.1.1-7) unstable; urgency=medium
+
+  * No error out on unmatched DOVI RPU trailing padding bytes
+  * Fix two unreleased variables in RKMPP
+  * Fix DX11-OCL sync issue on newer AMDGPU when using array of tex
+  * Refine return value handling in RKMPP decoders
+
+ -- nyanmisaka <nst799610810@gmail.com>  Thu, 3 Jul 2025 21:28:33 +0800
+
 jellyfin-ffmpeg (7.1.1-6) unstable; urgency=medium
 
   * lavc/videotoolbox: don't return external error for invalid vt frame
