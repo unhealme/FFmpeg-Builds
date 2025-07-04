@@ -299,7 +299,7 @@ Index: FFmpeg/libavcodec/rkmppdec.c
   *
   * This file is part of FFmpeg.
   *
-@@ -19,551 +20,1477 @@
+@@ -19,551 +20,1483 @@
   * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
   */
  
@@ -1246,34 +1246,34 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    if ((ret = frame_create_buf(frame, mpp_frame, mpp_frame_get_buf_size(mpp_frame),
 +                                rkmpp_free_mpp_frame, mpp_frame, AV_BUFFER_FLAG_READONLY)) < 0)
 +        return ret;
- 
--            av_log(avctx, AV_LOG_INFO, "Decoder noticed an info change (%dx%d), format=%d\n",
--                                        (int)mpp_frame_get_width(mppframe), (int)mpp_frame_get_height(mppframe),
--                                        (int)mpp_frame_get_fmt(mppframe));
++
 +    if ((ret = frame_create_buf(frame, (uint8_t *)desc, sizeof(*desc),
 +                                rkmpp_free_drm_desc, desc, AV_BUFFER_FLAG_READONLY)) < 0)
 +        return ret;
  
--            avctx->width = mpp_frame_get_width(mppframe);
--            avctx->height = mpp_frame_get_height(mppframe);
+-            av_log(avctx, AV_LOG_INFO, "Decoder noticed an info change (%dx%d), format=%d\n",
+-                                        (int)mpp_frame_get_width(mppframe), (int)mpp_frame_get_height(mppframe),
+-                                        (int)mpp_frame_get_fmt(mppframe));
 +    frame->data[0] = (uint8_t *)desc;
  
--            decoder->mpi->control(decoder->ctx, MPP_DEC_SET_INFO_CHANGE_READY, NULL);
+-            avctx->width = mpp_frame_get_width(mppframe);
+-            avctx->height = mpp_frame_get_height(mppframe);
 +    frame->hw_frames_ctx = av_buffer_ref(r->hwframe);
 +    if (!frame->hw_frames_ctx)
 +        return AVERROR(ENOMEM);
  
--            av_buffer_unref(&decoder->frames_ref);
+-            decoder->mpi->control(decoder->ctx, MPP_DEC_SET_INFO_CHANGE_READY, NULL);
 +    if ((ret = ff_decode_frame_props(avctx, frame)) < 0)
 +        return ret;
+ 
+-            av_buffer_unref(&decoder->frames_ref);
++    frame->width  = avctx->width;
++    frame->height = avctx->height;
  
 -            decoder->frames_ref = av_hwframe_ctx_alloc(decoder->device_ref);
 -            if (!decoder->frames_ref) {
 -                ret = AVERROR(ENOMEM);
 -                goto fail;
-+    frame->width  = avctx->width;
-+    frame->height = avctx->height;
-+
 +    mpp_frame_pts = mpp_frame_get_pts(mpp_frame);
 +    frame->pts    = MPP_PTS_TO_PTS(mpp_frame_pts, avctx->pkt_timebase);
 +
@@ -1323,11 +1323,15 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +        clear_unused_sd_frames(r->sd_frame_list, r->last_pts_dovi, mpp_frame_pts); /* display order */
 +    }
 +#endif
++
++    return 0;
++}
  
 -            mppformat = mpp_frame_get_fmt(mppframe);
 -            drmformat = rkmpp_get_frameformat(mppformat);
-+    return 0;
-+}
++static void rkmpp_export_avctx_color_props(AVCodecContext *avctx, MppFrame mpp_frame)
++{
++    int val;
  
 -            hwframes = (AVHWFramesContext*)decoder->frames_ref->data;
 -            hwframes->format    = AV_PIX_FMT_DRM_PRIME;
@@ -1337,9 +1341,8 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 -            ret = av_hwframe_ctx_init(decoder->frames_ref);
 -            if (ret < 0)
 -                goto fail;
-+static void rkmpp_export_avctx_color_props(AVCodecContext *avctx, MppFrame mpp_frame)
-+{
-+    int val;
++    if (!avctx || !mpp_frame)
++        return;
  
 -            // here decoder is fully initialized, we need to feed it again with data
 -            ret = AVERROR(EAGAIN);
@@ -1347,9 +1350,6 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 -        } else if (mpp_frame_get_eos(mppframe)) {
 -            av_log(avctx, AV_LOG_DEBUG, "Received a EOS frame.\n");
 -            decoder->eos_reached = 1;
-+    if (!avctx || !mpp_frame)
-+        return;
-+
 +    if (avctx->color_primaries == AVCOL_PRI_RESERVED0)
 +        avctx->color_primaries = AVCOL_PRI_UNSPECIFIED;
 +    if ((val = mpp_frame_get_color_primaries(mpp_frame)) &&
@@ -1425,9 +1425,15 @@ Index: FFmpeg/libavcodec/rkmppdec.c
 +    else
 +        ret = r->mapi->decode_get_frame(r->mctx, &mpp_frame);
 +
-+    if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT) {
-+        av_log(avctx, AV_LOG_ERROR, "Failed to get frame: %d\n", ret);
-+        return AVERROR_EXTERNAL;
++    if (ret != MPP_OK) {
++        if (timeout == MPP_TIMEOUT_NON_BLOCK) {
++            av_log(avctx, AV_LOG_ERROR, "Failed to get frame (non-block): %d\n", ret);
++            return AVERROR_EXTERNAL;
++        }
++        if (timeout != MPP_TIMEOUT_NON_BLOCK && ret != MPP_NOK && ret != MPP_ERR_TIMEOUT) {
++            av_log(avctx, AV_LOG_ERROR, "Failed to get frame (timeout: %d): %d\n", timeout, ret);
++            return AVERROR_EXTERNAL;
++        }
 +    }
 +
 +    if (!mpp_frame) {
