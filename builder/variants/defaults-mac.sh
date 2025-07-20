@@ -1,5 +1,6 @@
 MACOS_MAJOR_VER="$(sw_vers -productVersion | awk -F '.' '{print $1}')"
 XCODE_MAJOR_VER="$(xcodebuild -version | grep 'Xcode' | awk '{print $2}' | cut -d '.' -f 1)"
+MACOS_BUILDER_CPU_ARCH="$(uname -m)"
 
 FF_CFLAGS+="-I"$FFBUILD_PREFIX"/include"
 FF_LDFLAGS+="-L"$FFBUILD_PREFIX"/lib"
@@ -22,3 +23,15 @@ export PKG_CONFIG_PATH=""$FFBUILD_PREFIX"/lib/pkgconfig"
 export RANLIB="/usr/bin/ranlib"
 export MACOSX_DEPLOYMENT_TARGET="12.0"
 export CMAKE_POLICY_VERSION_MINIMUM="3.5"
+
+if [ "$MACOS_BUILDER_CPU_ARCH" = "arm64" ] && [ "$TARGET" = "mac64" ]; then
+    CROSS_CFLAGS="-arch x86_64"
+    CROSS_LDFLAGS="-arch x86_64"
+    FF_CFLAGS+=" $CROSS_CFLAGS"
+    FF_LDFLAGS+=" $CROSS_LDFLAGS"
+    FFBUILD_TARGET_FLAGS+=" --enable-cross-compile --arch=x86_64"
+    export CFLAGS="$CFLAGS $CROSS_CFLAGS"
+    export CXXFLAGS="$CXXFLAGS $CROSS_CFLAGS"
+    export LDFLAGS="$LDFLAGS $CROSS_LDFLAGS"
+    export CMAKE_OSX_ARCHITECTURES="x86_64"
+fi

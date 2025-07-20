@@ -44,7 +44,11 @@ ffbuild_dockerbuild() {
         )
         export CROSS="$FFBUILD_CROSS_PREFIX"
     elif [[ $TARGET == mac* ]]; then
-        :
+        if [ "$MACOS_BUILDER_CPU_ARCH" = "arm64" ] && [ "$TARGET" = "mac64" ]; then
+            myconf+=(
+                --target="x86_64-darwin21-gcc" # macOS 12 toolchain
+            )
+        fi
     else
         echo "Unknown target"
         return -1

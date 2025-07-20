@@ -27,7 +27,11 @@ ffbuild_dockerbuild() {
             --cross-file=/cross.meson
         )
     elif [[ $TARGET == mac* ]]; then
-        :
+        if [ "$MACOS_BUILDER_CPU_ARCH" = "arm64" ] && [ "$TARGET" = "mac64" ]; then
+            myconf+=(
+                --cross-file="$BUILDER_ROOT"/images/macos/cross/cross-x86_64.txt
+            )
+        fi
     else
         echo "Unknown target"
         return -1

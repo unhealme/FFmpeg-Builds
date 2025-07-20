@@ -29,6 +29,11 @@ ffbuild_dockerbuild() {
         myconf+=(
             --enable-cxx
         )
+        if [ "$MACOS_BUILDER_CPU_ARCH" = "arm64" ] && [ "$TARGET" = "mac64" ]; then
+            myconf+=(
+                --host="x86_64-apple-darwin" # Override GMP's autodetect
+            )
+        fi
         # The shipped configure script relies on an outdated libtool version
         # which causes linker errors due to name collisions on macOS
         # leads to wrongly compiled libraries
