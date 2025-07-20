@@ -16,7 +16,12 @@ get_output() {
     )
 }
 
-arch=$(uname -m)
+# Accept architecture as first argument, fallback to uname -m if not provided
+if [ -n "$1" ]; then
+    arch="$1"
+else
+    arch=$(uname -m)
+fi
 TARGET="macarm64"
 VARIANT="gpl"
 if [ "$arch" = "arm64" ]; then

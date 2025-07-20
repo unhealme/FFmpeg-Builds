@@ -26,7 +26,11 @@ ffbuild_dockerbuild() {
             --host="$FFBUILD_TOOLCHAIN"
         )
     elif [[ $TARGET == mac* ]]; then
-        :
+        if [ "$MACOS_BUILDER_CPU_ARCH" = "arm64" ] && [ "$TARGET" = "mac64" ]; then
+            myconf+=(
+                --host="x86_64-apple-darwin"
+            )
+        fi
     else
         echo "Unknown target"
         return -1

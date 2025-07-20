@@ -49,7 +49,11 @@ ffbuild_dockerbuild() {
             linux-aarch64
         )
     elif [[ $TARGET == mac* ]]; then
-        :
+        if [ "$MACOS_BUILDER_CPU_ARCH" = "arm64" ] && [ "$TARGET" = "mac64" ]; then
+            myconf+=(
+                darwin64-x86_64
+            )
+        fi
     else
         echo "Unknown target"
         return -1
