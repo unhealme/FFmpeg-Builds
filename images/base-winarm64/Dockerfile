@@ -50,5 +50,6 @@ ENV PATH="/opt/llvm-mingw/bin:${PATH}" \
     CFLAGS="-I/opt/ffbuild/include -O2 -pipe -march=armv8-a -D_FORTIFY_SOURCE=2 -fstack-protector-strong" \
     CXXFLAGS="-I/opt/ffbuild/include -O2 -pipe -march=armv8-a -D_FORTIFY_SOURCE=2 -fstack-protector-strong" \
     LDFLAGS="-L/opt/ffbuild/lib -O2 -pipe -march=armv8-a -fstack-protector-strong" \
+    RUSTFLAGS="" \
     STAGE_CFLAGS="" \
     STAGE_CXXFLAGS=""
