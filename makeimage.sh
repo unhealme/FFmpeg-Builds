@@ -6,7 +6,7 @@ source util/vars.sh
 TMPCFG="$(mktemp --suffix=.toml)"
 cat <<EOF >"$TMPCFG"
 [worker.oci]
-  max-parallelism = 8
+  max-parallelism = 4
 EOF
 trap "rm -f '$TMPCFG'" EXIT
 
